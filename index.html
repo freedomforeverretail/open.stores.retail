@@ -258,25 +258,36 @@
             const parseLowesData = (values) => {
                 const stores = [];
                 
+                console.log('📋 Lowe\'s raw data rows:', values.length);
+                console.log('📋 First 3 rows:', values.slice(0, 3));
+                
                 let headerRowIndex = -1;
                 for (let i = 0; i < Math.min(5, values.length); i++) {
-                    if (values[i] && values[i][0] && values[i][0].toString().toLowerCase().includes('store')) {
-                        headerRowIndex = i;
-                        break;
+                    const row = values[i];
+                    console.log(`Checking row ${i} for headers:`, row);
+                    if (row && row.length > 0) {
+                        const cellText = row[0]?.toString().toLowerCase() || '';
+                        console.log(`Row ${i}, Cell 0:`, cellText);
+                        if (cellText.includes('store') || cellText.includes('#')) {
+                            headerRowIndex = i;
+                            console.log(`✅ Found Lowe's header at row ${i}`);
+                            break;
+                        }
                     }
                 }
                 
                 if (headerRowIndex === -1) {
-                    console.log('❌ No header row found for Lowes');
-                    return stores;
+                    console.log('❌ No header row found for Lowes, using row 0 as header');
+                    headerRowIndex = 0;
                 }
                 
                 const dataStartIndex = headerRowIndex + 1;
+                console.log('📊 Starting data parse at row:', dataStartIndex);
                 
                 for (let i = dataStartIndex; i < values.length; i++) {
                     const row = values[i];
                     
-                    if (row.length >= 15) {
+                    if (row && row.length >= 15) {
                         const lat = parseFloat(row[13]);
                         const lng = parseFloat(row[14]);
                         
@@ -299,6 +310,7 @@
                     }
                 }
                 
+                console.log('✅ Lowe\'s stores parsed:', stores.length);
                 return stores;
             };
 
@@ -370,14 +382,25 @@
             };
 
             const filterStores = (storeList) => {
+                console.log('🔍 filterStores called with:', storeList.length, 'stores');
+                console.log('🔍 Retailer filter state:', retailerFilter);
+                
                 let filtered = storeList;
                 
                 // Apply retailer filter
+                const beforeRetailerFilter = filtered.length;
                 filtered = filtered.filter(store => {
-                    if (store.retailer === 'Home Depot') return retailerFilter.homeDepot;
-                    if (store.retailer === 'Lowe\'s') return retailerFilter.lowes;
+                    if (store.retailer === 'Home Depot') {
+                        console.log('Checking Home Depot store, filter is:', retailerFilter.homeDepot);
+                        return retailerFilter.homeDepot;
+                    }
+                    if (store.retailer === 'Lowe\'s') {
+                        console.log('Checking Lowes store, filter is:', retailerFilter.lowes);
+                        return retailerFilter.lowes;
+                    }
                     return true;
                 });
+                console.log(`After retailer filter: ${beforeRetailerFilter} → ${filtered.length}`);
                 
                 // Apply search filter
                 if (searchTerm.trim()) {
@@ -399,6 +422,7 @@
                     filtered = filtered.filter(store => store.state === stateFilter);
                 }
                 
+                console.log('🔍 Final filtered count:', filtered.length);
                 return filtered;
             };
 
