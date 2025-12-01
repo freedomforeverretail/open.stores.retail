@@ -33,6 +33,12 @@
                 COLOR: '#004990',
                 LABEL: 'Lowe\'s'
             },
+            ACE: {
+                SHEET_ID: '1EWvOJnVDsptBvjStdgk5tcIcfWnVTa1vG1cyA9QNozw',
+                SHEET_NAME: 'Store Roster',
+                COLOR: '#ED1C24',
+                LABEL: 'ACE Hardware'
+            },
             API_KEY: 'AIzaSyBHcVkUgYLoJnNKpTecRUpAyMHU-T8HqFY',
             REFRESH_MINUTES: 3,
             RESERVE_URL: 'https://docs.google.com/forms/d/e/1FAIpQLSdgGe9EyaLg8RcbaRdKFTyP3PJnaoR8UrmxKMi0c_MGQ6o8FQ/viewform'
@@ -79,7 +85,8 @@
             const [stateFilter, setStateFilter] = useState('all');
             const [retailerFilter, setRetailerFilter] = useState({
                 homeDepot: true,
-                lowes: true
+                lowes: true,
+                ace: true
             });
             const [selectedStore, setSelectedStore] = useState(null);
             const mapRef = useRef(null);
@@ -255,7 +262,63 @@
                 return stores;
             };
 
-            const parseLowesData = (values) => {
+            const parseAceData = (values) => {
+                const stores = [];
+                
+                console.log('📋 ACE raw data rows:', values.length);
+                console.log('📋 First 3 rows:', values.slice(0, 3));
+                
+                let headerRowIndex = -1;
+                for (let i = 0; i < Math.min(5, values.length); i++) {
+                    const row = values[i];
+                    if (row && row.length > 0) {
+                        const cellText = row[0]?.toString().toLowerCase() || '';
+                        if (cellText.includes('status')) {
+                            headerRowIndex = i;
+                            console.log(`✅ Found ACE header at row ${i}`);
+                            break;
+                        }
+                    }
+                }
+                
+                if (headerRowIndex === -1) {
+                    console.log('❌ No header row found for ACE, using row 0 as header');
+                    headerRowIndex = 0;
+                }
+                
+                const dataStartIndex = headerRowIndex + 1;
+                console.log('📊 Starting ACE data parse at row:', dataStartIndex);
+                
+                for (let i = dataStartIndex; i < values.length; i++) {
+                    const row = values[i];
+                    
+                    if (row && row.length >= 10) {
+                        const status = row[0]?.toString().trim().toLowerCase();
+                        const lat = parseFloat(row[7]);
+                        const lng = parseFloat(row[8]);
+                        
+                        if (status === 'open' && !isNaN(lat) && !isNaN(lng)) {
+                            const store = {
+                                status: 'Open',
+                                storeNumber: row[4]?.toString().trim() || '',
+                                storeName: row[5]?.toString().trim() || '',
+                                address: row[6]?.toString().trim() || '',
+                                city: row[10]?.toString().trim() || '',
+                                state: row[10]?.toString().trim() || '',
+                                zip: row[11]?.toString().trim() || '',
+                                latitude: lat,
+                                longitude: lng,
+                                retailer: 'ACE Hardware',
+                                color: CONFIG.ACE.COLOR
+                            };
+                            stores.push(store);
+                        }
+                    }
+                }
+                
+                console.log('✅ ACE stores parsed:', stores.length);
+                return stores;
+            };
                 const stores = [];
                 
                 console.log('📋 Lowe\'s raw data rows:', values.length);
@@ -359,6 +422,25 @@
                         console.error('❌ Error fetching Lowe\'s data:', err);
                     }
 
+                    // Fetch ACE data
+                    try {
+                        const aceEncodedSheetName = encodeURIComponent(CONFIG.ACE.SHEET_NAME);
+                        const aceUrl = `https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.ACE.SHEET_ID}/values/${aceEncodedSheetName}?key=${CONFIG.API_KEY}`;
+                        console.log('🔍 Fetching ACE data...');
+                        
+                        const aceResponse = await fetch(aceUrl);
+                        if (aceResponse.ok) {
+                            const aceData = await aceResponse.json();
+                            if (aceData.values && aceData.values.length > 0) {
+                                const aceStores = parseAceData(aceData.values);
+                                console.log(`✅ ACE: ${aceStores.length} stores loaded`);
+                                allStores.push(...aceStores);
+                            }
+                        }
+                    } catch (err) {
+                        console.error('❌ Error fetching ACE data:', err);
+                    }
+
                     console.log('📊 Total stores loaded:', allStores.length);
                     
                     if (allStores.length === 0) {
@@ -398,6 +480,10 @@
                         console.log('Checking Lowes store, filter is:', retailerFilter.lowes);
                         return retailerFilter.lowes;
                     }
+                    if (store.retailer === 'ACE Hardware') {
+                        console.log('Checking ACE store, filter is:', retailerFilter.ace);
+                        return retailerFilter.ace;
+                    }
                     return true;
                 });
                 console.log(`After retailer filter: ${beforeRetailerFilter} → ${filtered.length}`);
@@ -436,7 +522,8 @@
             const storeCounts = useMemo(() => {
                 return {
                     homeDepot: stores.filter(s => s.retailer === 'Home Depot').length,
-                    lowes: stores.filter(s => s.retailer === 'Lowe\'s').length
+                    lowes: stores.filter(s => s.retailer === 'Lowe\'s').length,
+                    ace: stores.filter(s => s.retailer === 'ACE Hardware').length
                 };
             }, [stores]);
 
@@ -541,6 +628,20 @@
                                 </div>
                                 <div style={{fontSize: '1.25rem', fontWeight: 'bold', marginTop: '0.25rem', color: '#004990'}}>{storeCounts.lowes}</div>
                             </div>
+                            
+                            <div style={{
+                                padding: '0.5rem',
+                                borderRadius: '0.5rem',
+                                border: '1px solid #ED1C24',
+                                background: 'linear-gradient(135deg, #FFEBEE 0%, #FFCDD2 100%)',
+                                width: '140px'
+                            }}>
+                                <div style={{display: 'flex', alignItems: 'center', gap: '0.375rem'}}>
+                                    <div style={{width: '0.75rem', height: '0.75rem', borderRadius: '50%', backgroundColor: '#ED1C24'}}></div>
+                                    <span style={{color: '#ED1C24', fontWeight: '500', fontSize: '0.875rem'}}>ACE Hardware</span>
+                                </div>
+                                <div style={{fontSize: '1.25rem', fontWeight: 'bold', marginTop: '0.25rem', color: '#ED1C24'}}>{storeCounts.ace}</div>
+                            </div>
                         </div>
 
                         {/* Retailer Toggle Filters */}
@@ -563,6 +664,16 @@
                                     className="w-4 h-4"
                                 />
                                 <span className="text-sm font-medium" style={{color: '#004990'}}>Show Lowe's</span>
+                            </label>
+                            
+                            <label className="flex items-center gap-2 px-3 py-1.5 bg-gray-50 rounded-lg border cursor-pointer hover:bg-gray-100">
+                                <input
+                                    type="checkbox"
+                                    checked={retailerFilter.ace}
+                                    onChange={(e) => setRetailerFilter(prev => ({...prev, ace: e.target.checked}))}
+                                    className="w-4 h-4"
+                                />
+                                <span className="text-sm font-medium" style={{color: '#ED1C24'}}>Show ACE Hardware</span>
                             </label>
                         </div>
                         
