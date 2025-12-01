@@ -1,0 +1,681 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Multi-Retailer Stores Map</title>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script async defer src="https://maps.googleapis.com/maps/api/js?key=AIzaSyBHcVkUgYLoJnNKpTecRUpAyMHU-T8HqFY&loading=async&callback=initMap"></script>
+    <style>
+        body { margin: 0; font-family: system-ui, -apple-system, sans-serif; }
+        #map { height: 100%; width: 100%; }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useMemo, useRef } = React;
+
+        const CONFIG = {
+            HOME_DEPOT: {
+                SHEET_ID: '1mzQ6P6REhGzu9LAlhosF1toF-j21jGadjKOppIbsoKc',
+                SHEET_NAME: 'public',
+                COLOR: '#F96302',
+                LABEL: 'Home Depot'
+            },
+            LOWES: {
+                SHEET_ID: '1cDvbvf7RNPHzz6lQtKBwc-CaiN_CrNLxa89UYfcdeIM',
+                SHEET_NAME: 'Sunly Assigned & Available Stores',
+                COLOR: '#004990',
+                LABEL: 'Lowe\'s'
+            },
+            API_KEY: 'AIzaSyBHcVkUgYLoJnNKpTecRUpAyMHU-T8HqFY',
+            REFRESH_MINUTES: 3,
+            RESERVE_URL: 'https://docs.google.com/forms/d/e/1FAIpQLSdgGe9EyaLg8RcbaRdKFTyP3PJnaoR8UrmxKMi0c_MGQ6o8FQ/viewform'
+        };
+
+        let map = null;
+        let markers = [];
+
+        const Search = ({ className }) => (
+            <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+        );
+
+        const Loader = ({ className }) => (
+            <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+        );
+
+        const RefreshCw = ({ className }) => (
+            <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M1 4v6h6M23 20v-6h-6" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.49 9A9 9 0 005.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 013.51 15" />
+            </svg>
+        );
+
+        const AlertCircle = ({ className }) => (
+            <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+        );
+
+        window.initMap = function() {
+            console.log('✅ Google Maps API loaded successfully');
+        };
+
+        const MultiRetailerMap = () => {
+            const [stores, setStores] = useState([]);
+            const [loading, setLoading] = useState(true);
+            const [error, setError] = useState('');
+            const [lastUpdated, setLastUpdated] = useState(null);
+            const [searchTerm, setSearchTerm] = useState('');
+            const [stateFilter, setStateFilter] = useState('all');
+            const [retailerFilter, setRetailerFilter] = useState({
+                homeDepot: true,
+                lowes: true
+            });
+            const [selectedStore, setSelectedStore] = useState(null);
+            const mapRef = useRef(null);
+            const [mapLoaded, setMapLoaded] = useState(false);
+
+            const initializeMap = () => {
+                if (!window.google?.maps?.Map || !mapRef.current) {
+                    return false;
+                }
+
+                try {
+                    map = new window.google.maps.Map(mapRef.current, {
+                        zoom: 4,
+                        center: { lat: 39.8283, lng: -98.5795 },
+                        mapTypeId: 'roadmap',
+                        restriction: {
+                            latLngBounds: {
+                                north: 49.0,
+                                south: 25.0,
+                                west: -125.0,
+                                east: -66.0,
+                            },
+                            strictBounds: false,
+                        },
+                        styles: [
+                            {
+                                featureType: 'poi',
+                                elementType: 'labels',
+                                stylers: [{ visibility: 'off' }]
+                            },
+                            {
+                                featureType: 'road',
+                                elementType: 'labels',
+                                stylers: [{ visibility: 'off' }]
+                            },
+                            {
+                                featureType: 'road.local',
+                                elementType: 'geometry',
+                                stylers: [{ visibility: 'off' }]
+                            },
+                            {
+                                featureType: 'road.arterial',
+                                elementType: 'geometry',
+                                stylers: [{ lightness: 20 }]
+                            },
+                            {
+                                featureType: 'water',
+                                elementType: 'labels',
+                                stylers: [{ visibility: 'off' }]
+                            },
+                            {
+                                featureType: 'administrative.locality',
+                                elementType: 'labels',
+                                stylers: [{ visibility: 'off' }]
+                            },
+                            {
+                                featureType: 'landscape',
+                                elementType: 'labels',
+                                stylers: [{ visibility: 'off' }]
+                            },
+                            {
+                                featureType: 'administrative.province',
+                                elementType: 'geometry.stroke',
+                                stylers: [{ color: '#999999', weight: 1 }]
+                            },
+                            {
+                                featureType: 'transit',
+                                elementType: 'all',
+                                stylers: [{ visibility: 'off' }]
+                            }
+                        ],
+                        streetViewControl: false,
+                        fullscreenControl: false,
+                        mapTypeControl: false
+                    });
+
+                    setMapLoaded(true);
+                    return true;
+                } catch (error) {
+                    console.error('❌ Error initializing map:', error);
+                    return false;
+                }
+            };
+
+            const addMarkersToMap = (storeData) => {
+                if (!map || !window.google) {
+                    console.log('❌ Cannot add markers - map or google not available');
+                    return;
+                }
+
+                console.log('🗺️ Adding markers for', storeData.length, 'stores');
+
+                markers.forEach(marker => marker.setMap(null));
+                markers = [];
+
+                storeData.forEach((store, index) => {
+                    const marker = new window.google.maps.Marker({
+                        position: { lat: store.latitude, lng: store.longitude },
+                        map: map,
+                        title: `${store.storeName} - ${store.retailer}`,
+                        icon: {
+                            path: window.google.maps.SymbolPath.CIRCLE,
+                            fillColor: store.color,
+                            fillOpacity: 1,
+                            strokeColor: '#ffffff',
+                            strokeWeight: 1,
+                            scale: 8
+                        }
+                    });
+
+                    marker.addListener('click', () => {
+                        setSelectedStore(store);
+                    });
+
+                    markers.push(marker);
+                });
+
+                console.log('🎯 Total markers created:', markers.length);
+                
+                if (markers.length > 0) {
+                    const bounds = new window.google.maps.LatLngBounds();
+                    markers.forEach(marker => bounds.extend(marker.getPosition()));
+                    map.fitBounds(bounds);
+                }
+            };
+
+            const parseHomeDepotData = (values) => {
+                const stores = [];
+                
+                let headerRowIndex = -1;
+                for (let i = 0; i < Math.min(3, values.length); i++) {
+                    if (values[i] && values[i][0] && values[i][0].toString().toLowerCase().includes('status')) {
+                        headerRowIndex = i;
+                        break;
+                    }
+                }
+                
+                if (headerRowIndex === -1) {
+                    console.log('❌ No header row found for Home Depot');
+                    return stores;
+                }
+                
+                const dataStartIndex = headerRowIndex + 1;
+                
+                for (let i = dataStartIndex; i < values.length; i++) {
+                    const row = values[i];
+                    
+                    if (row.length >= 20) {
+                        const status = row[0]?.toString().trim().toLowerCase();
+                        const lat = parseFloat(row[17]);
+                        const lng = parseFloat(row[18]);
+                        
+                        if (status === 'open' && !isNaN(lat) && !isNaN(lng)) {
+                            const store = {
+                                status: 'Open',
+                                owner: row[1]?.toString().trim() || '',
+                                retailer: 'Home Depot',
+                                storeNumber: row[11]?.toString().trim() || '',
+                                storeName: row[12]?.toString().trim() || '',
+                                address: row[13]?.toString().trim() || '',
+                                city: row[14]?.toString().trim() || '',
+                                state: row[15]?.toString().trim() || '',
+                                zip: row[19]?.toString().trim() || '',
+                                latitude: lat,
+                                longitude: lng,
+                                color: CONFIG.HOME_DEPOT.COLOR
+                            };
+                            stores.push(store);
+                        }
+                    }
+                }
+                
+                return stores;
+            };
+
+            const parseLowesData = (values) => {
+                const stores = [];
+                
+                let headerRowIndex = -1;
+                for (let i = 0; i < Math.min(5, values.length); i++) {
+                    if (values[i] && values[i][0] && values[i][0].toString().toLowerCase().includes('store')) {
+                        headerRowIndex = i;
+                        break;
+                    }
+                }
+                
+                if (headerRowIndex === -1) {
+                    console.log('❌ No header row found for Lowes');
+                    return stores;
+                }
+                
+                const dataStartIndex = headerRowIndex + 1;
+                
+                for (let i = dataStartIndex; i < values.length; i++) {
+                    const row = values[i];
+                    
+                    if (row.length >= 15) {
+                        const lat = parseFloat(row[13]);
+                        const lng = parseFloat(row[14]);
+                        
+                        if (!isNaN(lat) && !isNaN(lng)) {
+                            const store = {
+                                storeNumber: row[0]?.toString().trim() || '',
+                                storeName: row[1]?.toString().trim() || '',
+                                state: row[2]?.toString().trim() || '',
+                                status: row[6]?.toString().trim() || '',
+                                address: row[8]?.toString().trim() || '',
+                                city: '',
+                                zip: '',
+                                latitude: lat,
+                                longitude: lng,
+                                retailer: 'Lowe\'s',
+                                color: CONFIG.LOWES.COLOR
+                            };
+                            stores.push(store);
+                        }
+                    }
+                }
+                
+                return stores;
+            };
+
+            const fetchFromGoogleSheets = async () => {
+                try {
+                    setLoading(true);
+                    setError('');
+
+                    const allStores = [];
+
+                    // Fetch Home Depot data
+                    try {
+                        const hdEncodedSheetName = encodeURIComponent(CONFIG.HOME_DEPOT.SHEET_NAME);
+                        const hdUrl = `https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.HOME_DEPOT.SHEET_ID}/values/${hdEncodedSheetName}?key=${CONFIG.API_KEY}`;
+                        console.log('🔍 Fetching Home Depot data...');
+                        
+                        const hdResponse = await fetch(hdUrl);
+                        if (hdResponse.ok) {
+                            const hdData = await hdResponse.json();
+                            if (hdData.values && hdData.values.length > 0) {
+                                const hdStores = parseHomeDepotData(hdData.values);
+                                console.log(`✅ Home Depot: ${hdStores.length} stores loaded`);
+                                allStores.push(...hdStores);
+                            }
+                        }
+                    } catch (err) {
+                        console.error('❌ Error fetching Home Depot data:', err);
+                    }
+
+                    // Fetch Lowe's data
+                    try {
+                        const lowesEncodedSheetName = encodeURIComponent(CONFIG.LOWES.SHEET_NAME);
+                        const lowesUrl = `https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.LOWES.SHEET_ID}/values/${lowesEncodedSheetName}?key=${CONFIG.API_KEY}`;
+                        console.log('🔍 Fetching Lowe\'s data...');
+                        
+                        const lowesResponse = await fetch(lowesUrl);
+                        if (lowesResponse.ok) {
+                            const lowesData = await lowesResponse.json();
+                            if (lowesData.values && lowesData.values.length > 0) {
+                                const lowesStores = parseLowesData(lowesData.values);
+                                console.log(`✅ Lowe's: ${lowesStores.length} stores loaded`);
+                                allStores.push(...lowesStores);
+                            }
+                        }
+                    } catch (err) {
+                        console.error('❌ Error fetching Lowe\'s data:', err);
+                    }
+
+                    console.log('📊 Total stores loaded:', allStores.length);
+                    
+                    if (allStores.length === 0) {
+                        throw new Error('No data loaded from any retailer');
+                    }
+                    
+                    setStores(allStores);
+                    setLastUpdated(new Date());
+
+                    if (mapLoaded) {
+                        const filtered = filterStores(allStores);
+                        addMarkersToMap(filtered);
+                    }
+                    
+                } catch (err) {
+                    console.error('❌ Error fetching data:', err);
+                    setError(err.message);
+                } finally {
+                    setLoading(false);
+                }
+            };
+
+            const filterStores = (storeList) => {
+                let filtered = storeList;
+                
+                // Apply retailer filter
+                filtered = filtered.filter(store => {
+                    if (store.retailer === 'Home Depot') return retailerFilter.homeDepot;
+                    if (store.retailer === 'Lowe\'s') return retailerFilter.lowes;
+                    return true;
+                });
+                
+                // Apply search filter
+                if (searchTerm.trim()) {
+                    filtered = filtered.filter(store => {
+                        const searchLower = searchTerm.toLowerCase();
+                        return (
+                            (store.storeName || '').toLowerCase().includes(searchLower) ||
+                            (store.city || '').toLowerCase().includes(searchLower) ||
+                            (store.retailer || '').toLowerCase().includes(searchLower) ||
+                            (store.state || '').toLowerCase().includes(searchLower) ||
+                            (store.storeNumber || '').toLowerCase().includes(searchLower) ||
+                            (store.address || '').toLowerCase().includes(searchLower)
+                        );
+                    });
+                }
+                
+                // Apply state filter
+                if (stateFilter !== 'all') {
+                    filtered = filtered.filter(store => store.state === stateFilter);
+                }
+                
+                return filtered;
+            };
+
+            const filteredStores = useMemo(() => {
+                return filterStores(stores);
+            }, [stores, searchTerm, stateFilter, retailerFilter]);
+
+            const uniqueStates = [...new Set(stores.map(store => store.state))].filter(state => state && state.trim() !== '').sort();
+
+            const storeCounts = useMemo(() => {
+                return {
+                    homeDepot: stores.filter(s => s.retailer === 'Home Depot').length,
+                    lowes: stores.filter(s => s.retailer === 'Lowe\'s').length
+                };
+            }, [stores]);
+
+            useEffect(() => {
+                let attempts = 0;
+                const maxAttempts = 50;
+
+                const checkGoogleMaps = () => {
+                    attempts++;
+                    
+                    if (window.google?.maps?.Map && mapRef.current) {
+                        const success = initializeMap();
+                        if (success) {
+                            return;
+                        }
+                    }
+                    
+                    if (attempts < maxAttempts) {
+                        setTimeout(checkGoogleMaps, 100);
+                    } else {
+                        setError('Failed to load Google Maps. Please refresh the page.');
+                    }
+                };
+                
+                checkGoogleMaps();
+            }, []);
+
+            useEffect(() => {
+                if (mapLoaded && filteredStores.length > 0) {
+                    addMarkersToMap(filteredStores);
+                }
+            }, [mapLoaded, filteredStores]);
+
+            useEffect(() => {
+                console.log('🚀 Initial load starting...');
+                fetchFromGoogleSheets();
+                if (CONFIG.REFRESH_MINUTES > 0) {
+                    const interval = setInterval(fetchFromGoogleSheets, CONFIG.REFRESH_MINUTES * 60 * 1000);
+                    return () => clearInterval(interval);
+                }
+            }, []);
+
+            return (
+                <div className="w-full h-screen bg-gray-50 flex flex-col">
+                    <div className="bg-white shadow-sm border-b px-4 md:px-6 py-1">
+                        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 mb-1">
+                            <h1 className="text-xl md:text-2xl font-bold text-gray-900">Multi-Retailer Stores Map</h1>
+                            <button
+                                onClick={fetchFromGoogleSheets}
+                                disabled={loading}
+                                className="px-3 md:px-4 py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 flex items-center gap-2 text-sm md:text-base touch-manipulation"
+                            >
+                                {loading ? <Loader className="w-5 h-5 animate-spin" /> : <RefreshCw className="w-5 h-5" />}
+                                <span className="hidden sm:inline">Refresh Data</span>
+                                <span className="sm:hidden">Refresh</span>
+                            </button>
+                        </div>
+
+                        {error && (
+                            <div className="mb-1 p-3 bg-red-50 border border-red-200 rounded-lg flex items-center gap-2">
+                                <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0" />
+                                <span className="text-red-700 text-base">{error}</span>
+                            </div>
+                        )}
+
+                        {lastUpdated && (
+                            <div className="mb-1 text-xs md:text-sm text-gray-600">
+                                Last updated: {lastUpdated.toLocaleString()}
+                                {CONFIG.REFRESH_MINUTES > 0 && (
+                                    <span className="hidden sm:inline"> • Auto-refresh every {CONFIG.REFRESH_MINUTES} minutes</span>
+                                )}
+                            </div>
+                        )}
+
+                        {/* Retailer Summary */}
+                        <div className="flex flex-wrap gap-2 mb-2">
+                            <div style={{
+                                padding: '0.375rem',
+                                borderRadius: '0.375rem',
+                                border: '1px solid #F96302',
+                                background: 'linear-gradient(135deg, #FFF3E0 0%, #FFE0B2 100%)',
+                                display: 'inline-block'
+                            }}>
+                                <div style={{display: 'flex', alignItems: 'center', gap: '0.375rem'}}>
+                                    <div style={{width: '0.75rem', height: '0.75rem', borderRadius: '50%', backgroundColor: '#F96302'}}></div>
+                                    <span style={{color: '#F96302', fontWeight: '500', fontSize: '0.875rem'}}>Home Depot</span>
+                                </div>
+                                <div style={{fontSize: '1rem', fontWeight: 'bold', marginTop: '0.125rem', color: '#F96302'}}>{storeCounts.homeDepot}</div>
+                            </div>
+                            
+                            <div style={{
+                                padding: '0.375rem',
+                                borderRadius: '0.375rem',
+                                border: '1px solid #004990',
+                                background: 'linear-gradient(135deg, #E3F2FD 0%, #BBDEFB 100%)',
+                                display: 'inline-block'
+                            }}>
+                                <div style={{display: 'flex', alignItems: 'center', gap: '0.375rem'}}>
+                                    <div style={{width: '0.75rem', height: '0.75rem', borderRadius: '50%', backgroundColor: '#004990'}}></div>
+                                    <span style={{color: '#004990', fontWeight: '500', fontSize: '0.875rem'}}>Lowe's</span>
+                                </div>
+                                <div style={{fontSize: '1rem', fontWeight: 'bold', marginTop: '0.125rem', color: '#004990'}}>{storeCounts.lowes}</div>
+                            </div>
+                        </div>
+
+                        {/* Retailer Toggle Filters */}
+                        <div className="flex flex-wrap gap-2 mb-2">
+                            <label className="flex items-center gap-2 px-3 py-1.5 bg-gray-50 rounded-lg border cursor-pointer hover:bg-gray-100">
+                                <input
+                                    type="checkbox"
+                                    checked={retailerFilter.homeDepot}
+                                    onChange={(e) => setRetailerFilter(prev => ({...prev, homeDepot: e.target.checked}))}
+                                    className="w-4 h-4"
+                                />
+                                <span className="text-sm font-medium" style={{color: '#F96302'}}>Show Home Depot</span>
+                            </label>
+                            
+                            <label className="flex items-center gap-2 px-3 py-1.5 bg-gray-50 rounded-lg border cursor-pointer hover:bg-gray-100">
+                                <input
+                                    type="checkbox"
+                                    checked={retailerFilter.lowes}
+                                    onChange={(e) => setRetailerFilter(prev => ({...prev, lowes: e.target.checked}))}
+                                    className="w-4 h-4"
+                                />
+                                <span className="text-sm font-medium" style={{color: '#004990'}}>Show Lowe's</span>
+                            </label>
+                        </div>
+                        
+                        {/* Search and State Filters */}
+                        <div className="flex flex-col lg:flex-row gap-2 md:gap-3 items-stretch lg:items-center">
+                            <div className="flex items-center gap-2 flex-1 min-w-0">
+                                <Search className="w-4 h-4 text-gray-500 flex-shrink-0" />
+                                <input
+                                    type="text"
+                                    placeholder="Search stores, cities, retailers..."
+                                    value={searchTerm}
+                                    onChange={(e) => setSearchTerm(e.target.value)}
+                                    className="flex-1 px-2 py-1.5 border rounded-lg text-sm touch-manipulation"
+                                />
+                            </div>
+                            
+                            <div className="flex flex-wrap lg:flex-nowrap items-center gap-2">
+                                <select
+                                    value={stateFilter}
+                                    onChange={(e) => setStateFilter(e.target.value)}
+                                    className="px-2 py-1.5 border rounded-lg text-sm touch-manipulation min-w-0"
+                                >
+                                    <option value="all">All States ({stores.length})</option>
+                                    {uniqueStates.map(state => {
+                                        const stateCount = stores.filter(store => store.state === state).length;
+                                        return (
+                                            <option key={state} value={state}>
+                                                {state || 'Unknown'} ({stateCount})
+                                            </option>
+                                        );
+                                    })}
+                                </select>
+                                
+                                <div className="text-sm text-gray-600 whitespace-nowrap font-medium">
+                                    Showing {filteredStores.length} of {stores.length} stores
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="flex-1 flex">
+                        <div className="flex-1 relative">
+                            <div ref={mapRef} id="map" className="w-full h-full"></div>
+                            
+                            {loading && (
+                                <div className="absolute inset-0 bg-white bg-opacity-90 flex items-center justify-center z-10">
+                                    <div className="flex flex-col items-center gap-4 p-6 bg-white rounded-xl shadow-lg border">
+                                        <Loader className="w-8 h-8 animate-spin text-blue-600" />
+                                        <span className="text-gray-700 font-medium">Loading stores from multiple retailers...</span>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                        
+                        {selectedStore && (
+                            <div className="w-full sm:w-72 md:w-80 bg-white shadow-lg border-l overflow-y-auto">
+                                <div className="p-4">
+                                    <div className="flex items-start justify-between mb-3">
+                                        <div className="flex-1 min-w-0">
+                                            <h2 className="text-base font-bold leading-tight">{selectedStore.storeName}</h2>
+                                        </div>
+                                        <button
+                                            onClick={() => setSelectedStore(null)}
+                                            className="text-gray-400 hover:text-gray-600 text-xl ml-3 p-1 hover:bg-gray-100 rounded flex-shrink-0"
+                                            title="Close panel"
+                                        >
+                                            ×
+                                        </button>
+                                    </div>
+                                    
+                                    <div className="space-y-4">
+                                        <div>
+                                            <div className="text-xs font-medium text-gray-700 mb-2">Retailer</div>
+                                            <div className="inline-block px-3 py-1 rounded-full text-sm font-medium" style={{
+                                                backgroundColor: selectedStore.retailer === 'Home Depot' ? '#FFF3E0' : '#E3F2FD',
+                                                color: selectedStore.color
+                                            }}>
+                                                {selectedStore.retailer}
+                                            </div>
+                                        </div>
+                                        
+                                        {selectedStore.status && (
+                                            <div>
+                                                <div className="text-xs font-medium text-gray-700 mb-2">Status</div>
+                                                <div className="text-sm text-gray-900">{selectedStore.status}</div>
+                                            </div>
+                                        )}
+                                        
+                                        <div>
+                                            <div className="text-xs font-medium text-gray-700 mb-2">Store Number</div>
+                                            <div className="text-sm text-gray-900">{selectedStore.storeNumber}</div>
+                                        </div>
+                                        
+                                        <div>
+                                            <div className="text-xs font-medium text-gray-700 mb-2">Address</div>
+                                            <div className="text-sm text-gray-900 leading-relaxed">
+                                                {selectedStore.address}
+                                                {selectedStore.city && selectedStore.city.trim() !== '' && (
+                                                    <>
+                                                        <br/>
+                                                        {selectedStore.city}, {selectedStore.state} {selectedStore.zip}
+                                                    </>
+                                                )}
+                                                {(!selectedStore.city || selectedStore.city.trim() === '') && selectedStore.state && (
+                                                    <>
+                                                        <br/>
+                                                        {selectedStore.state}
+                                                    </>
+                                                )}
+                                            </div>
+                                        </div>
+
+                                        <div className="pt-4 border-t">
+                                            <a
+                                                href={CONFIG.RESERVE_URL}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="w-full text-white px-4 py-3 rounded-lg font-medium text-center block transition-colors text-sm hover:shadow-lg"
+                                                style={{backgroundColor: selectedStore.color}}
+                                                onMouseEnter={(e) => {
+                                                    e.target.style.backgroundColor = selectedStore.retailer === 'Home Depot' ? '#d65502' : '#003366';
+                                                }}
+                                                onMouseLeave={(e) => {
+                                                    e.target.style.backgroundColor = selectedStore.color;
+                                                }}
+                                            >
+                                                Reserve This Store
+                                            </a>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            );
+        };
+
+        ReactDOM.render(<MultiRetailerMap />, document.getElementById('root'));
+    </script>
+</body>
+</html>
