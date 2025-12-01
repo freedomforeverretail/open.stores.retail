@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Multi-Retailer Stores Map</title>
+    <title>Freedom Available Retail Locations</title>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -517,7 +517,7 @@
                 <div className="w-full h-screen bg-gray-50 flex flex-col">
                     <div className="bg-white shadow-sm border-b px-4 md:px-6 py-1">
                         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 mb-1">
-                            <h1 className="text-xl md:text-2xl font-bold text-gray-900">Multi-Retailer Stores Map</h1>
+                            <h1 className="text-xl md:text-2xl font-bold text-gray-900">Freedom Available Retail Locations</h1>
                             <button
                                 onClick={fetchFromGoogleSheets}
                                 disabled={loading}
@@ -730,24 +730,6 @@
                                                     </>
                                                 )}
                                             </div>
-                                        </div>
-
-                                        <div className="pt-4 border-t">
-                                            <a
-                                                href={CONFIG.RESERVE_URL}
-                                                target="_blank"
-                                                rel="noopener noreferrer"
-                                                className="w-full text-white px-4 py-3 rounded-lg font-medium text-center block transition-colors text-sm hover:shadow-lg"
-                                                style={{backgroundColor: selectedStore.color}}
-                                                onMouseEnter={(e) => {
-                                                    e.target.style.backgroundColor = selectedStore.retailer === 'Home Depot' ? '#d65502' : '#003366';
-                                                }}
-                                                onMouseLeave={(e) => {
-                                                    e.target.style.backgroundColor = selectedStore.color;
-                                                }}
-                                            >
-                                                Reserve This Store
-                                            </a>
                                         </div>
                                     </div>
                                 </div>
