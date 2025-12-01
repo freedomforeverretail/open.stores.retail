@@ -319,62 +319,8 @@
                 console.log('✅ ACE stores parsed:', stores.length);
                 return stores;
             };
-                const stores = [];
-                
-                console.log('📋 Lowe\'s raw data rows:', values.length);
-                console.log('📋 First 3 rows:', values.slice(0, 3));
-                
-                let headerRowIndex = -1;
-                for (let i = 0; i < Math.min(5, values.length); i++) {
-                    const row = values[i];
-                    console.log(`Checking row ${i} for headers:`, row);
-                    if (row && row.length > 0) {
-                        const cellText = row[0]?.toString().toLowerCase() || '';
-                        console.log(`Row ${i}, Cell 0:`, cellText);
-                        if (cellText.includes('store') || cellText.includes('#')) {
-                            headerRowIndex = i;
-                            console.log(`✅ Found Lowe's header at row ${i}`);
-                            break;
-                        }
-                    }
-                }
-                
-                if (headerRowIndex === -1) {
-                    console.log('❌ No header row found for Lowes, using row 0 as header');
-                    headerRowIndex = 0;
-                }
-                
-                const dataStartIndex = headerRowIndex + 1;
-                console.log('📊 Starting data parse at row:', dataStartIndex);
-                
-                for (let i = dataStartIndex; i < values.length; i++) {
-                    const row = values[i];
-                    
-                    if (row && row.length >= 15) {
-                        const lat = parseFloat(row[13]);
-                        const lng = parseFloat(row[14]);
-                        
-                        if (!isNaN(lat) && !isNaN(lng)) {
-                            const store = {
-                                storeNumber: row[0]?.toString().trim() || '',
-                                storeName: row[1]?.toString().trim() || '',
-                                state: row[2]?.toString().trim() || '',
-                                status: row[6]?.toString().trim() || '',
-                                address: row[8]?.toString().trim() || '',
-                                city: '',
-                                zip: '',
-                                latitude: lat,
-                                longitude: lng,
-                                retailer: 'Lowe\'s',
-                                color: CONFIG.LOWES.COLOR
-                            };
-                            stores.push(store);
-                        }
-                    }
-                }
-                
-                console.log('✅ Lowe\'s stores parsed:', stores.length);
-                return stores;
+
+            const parseLowesData = (values) => {
             };
 
             const fetchFromGoogleSheets = async () => {
