@@ -292,20 +292,21 @@
                 for (let i = dataStartIndex; i < values.length; i++) {
                     const row = values[i];
                     
-                    if (row && row.length >= 10) {
+                    if (row && row.length >= 13) {
                         const status = row[0]?.toString().trim().toLowerCase();
-                        const lat = parseFloat(row[7]);
-                        const lng = parseFloat(row[8]);
+                        const lat = parseFloat(row[8]);
+                        const lng = parseFloat(row[9]);
                         
                         if (status === 'open' && !isNaN(lat) && !isNaN(lng)) {
                             const store = {
                                 status: 'Open',
+                                dealer: row[1]?.toString().trim() || '',
                                 storeNumber: row[4]?.toString().trim() || '',
-                                storeName: row[5]?.toString().trim() || '',
-                                address: row[6]?.toString().trim() || '',
-                                city: row[10]?.toString().trim() || '',
-                                state: row[11]?.toString().trim() || '',
-                                zip: row[12]?.toString().trim() || '',
+                                storeName: row[6]?.toString().trim() || '',
+                                address: row[7]?.toString().trim() || '',
+                                city: row[11]?.toString().trim() || '',
+                                state: row[12]?.toString().trim() || '',
+                                zip: row[13]?.toString().trim() || '',
                                 latitude: lat,
                                 longitude: lng,
                                 retailer: 'ACE Hardware',
@@ -321,6 +322,65 @@
             };
 
             const parseLowesData = (values) => {
+                const stores = [];
+                
+                console.log('📋 Lowe\'s raw data rows:', values.length);
+                console.log('📋 First 3 rows:', values.slice(0, 3));
+                
+                // Find header row
+                let headerRowIndex = -1;
+                for (let i = 0; i < Math.min(5, values.length); i++) {
+                    const row = values[i];
+                    if (row && row.length > 0) {
+                        const cellText = row[0]?.toString().toLowerCase() || '';
+                        if (cellText.includes('status')) {
+                            headerRowIndex = i;
+                            console.log(`✅ Found Lowe's header at row ${i}`);
+                            break;
+                        }
+                    }
+                }
+                
+                if (headerRowIndex === -1) {
+                    console.log('❌ No header row found for Lowe\'s, using row 0 as header');
+                    headerRowIndex = 0;
+                }
+                
+                const dataStartIndex = headerRowIndex + 1;
+                console.log('📊 Starting Lowe\'s data parse at row:', dataStartIndex);
+                
+                for (let i = dataStartIndex; i < values.length; i++) {
+                    const row = values[i];
+                    
+                    // Adjust minimum column count based on actual sheet structure
+                    if (row && row.length >= 10) {
+                        const status = row[0]?.toString().trim().toLowerCase();
+                        
+                        // Try to parse coordinates - adjust indices as needed
+                        const lat = parseFloat(row[7]);  // Adjust this index
+                        const lng = parseFloat(row[8]);  // Adjust this index
+                        
+                        if (status === 'open' && !isNaN(lat) && !isNaN(lng)) {
+                            const store = {
+                                status: 'Open',
+                                storeNumber: row[4]?.toString().trim() || '',
+                                storeName: row[5]?.toString().trim() || '',
+                                address: row[6]?.toString().trim() || '',
+                                city: row[10]?.toString().trim() || '',
+                                state: row[11]?.toString().trim() || '',
+                                zip: row[12]?.toString().trim() || '',
+                                latitude: lat,
+                                longitude: lng,
+                                retailer: 'Lowe\'s',
+                                color: CONFIG.LOWES.COLOR
+                            };
+                            stores.push(store);
+                        }
+                    }
+                }
+                
+                console.log('✅ Lowe\'s stores parsed:', stores.length);
+                return stores;
             };
 
             const fetchFromGoogleSheets = async () => {
@@ -419,15 +479,12 @@
                 const beforeRetailerFilter = filtered.length;
                 filtered = filtered.filter(store => {
                     if (store.retailer === 'Home Depot') {
-                        console.log('Checking Home Depot store, filter is:', retailerFilter.homeDepot);
                         return retailerFilter.homeDepot;
                     }
                     if (store.retailer === 'Lowe\'s') {
-                        console.log('Checking Lowes store, filter is:', retailerFilter.lowes);
                         return retailerFilter.lowes;
                     }
                     if (store.retailer === 'ACE Hardware') {
-                        console.log('Checking ACE store, filter is:', retailerFilter.ace);
                         return retailerFilter.ace;
                     }
                     return true;
@@ -694,7 +751,7 @@
                                         <div>
                                             <div className="text-xs font-medium text-gray-700 mb-2">Retailer</div>
                                             <div className="inline-block px-3 py-1 rounded-full text-sm font-medium" style={{
-                                                backgroundColor: selectedStore.retailer === 'Home Depot' ? '#FFF3E0' : '#E3F2FD',
+                                                backgroundColor: selectedStore.retailer === 'Home Depot' ? '#FFF3E0' : selectedStore.retailer === 'Lowe\'s' ? '#E3F2FD' : '#FFEBEE',
                                                 color: selectedStore.color
                                             }}>
                                                 {selectedStore.retailer}
@@ -717,10 +774,8 @@
                                             <div className="text-xs font-medium text-gray-700 mb-2">Address</div>
                                             <div className="text-sm text-gray-900 leading-relaxed">
                                                 {selectedStore.retailer === 'ACE Hardware' ? (
-                                                    // ACE has full address in one field, don't duplicate
                                                     selectedStore.address
                                                 ) : (
-                                                    // Home Depot and Lowe's need city/state/zip appended
                                                     <>
                                                         {selectedStore.address}
                                                         {selectedStore.city && selectedStore.city.trim() !== '' && (
