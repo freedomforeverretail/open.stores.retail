@@ -41,12 +41,13 @@
                 LABEL: 'ACE Hardware'
             },
             API_KEY: 'AIzaSyBHcVkUgYLoJnNKpTecRUpAyMHU-T8HqFY',
-            REFRESH_MINUTES: 3,
+            REFRESH_MINUTES: 30,
             RESERVE_URL: 'https://docs.google.com/forms/d/e/1FAIpQLSdgGe9EyaLg8RcbaRdKFTyP3PJnaoR8UrmxKMi0c_MGQ6o8FQ/viewform'
         };
 
         let map = null;
         let markers = [];
+        let geocodeCache = {}; // Cache geocoded addresses to avoid re-geocoding
 
         const Search = ({ className }) => (
             <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -100,6 +101,12 @@
                     return null;
                 }
 
+                // Check cache first
+                if (geocodeCache[address]) {
+                    console.log(`📦 Using cached coordinates for: ${address}`);
+                    return geocodeCache[address];
+                }
+
                 try {
                     const encodedAddress = encodeURIComponent(address);
                     const url = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodedAddress}&key=${CONFIG.API_KEY}`;
@@ -109,11 +116,16 @@
                     
                     if (data.status === 'OK' && data.results && data.results.length > 0) {
                         const location = data.results[0].geometry.location;
-                        console.log(`✅ Geocoded: ${address} → ${location.lat}, ${location.lng}`);
-                        return {
+                        const coords = {
                             lat: location.lat,
                             lng: location.lng
                         };
+                        
+                        // Cache the result
+                        geocodeCache[address] = coords;
+                        
+                        console.log(`✅ Geocoded: ${address} → ${coords.lat}, ${coords.lng}`);
+                        return coords;
                     } else {
                         console.warn(`⚠️ Geocoding failed for: ${address} (${data.status})`);
                         return null;
