@@ -377,6 +377,19 @@
                 const dataStartIndex = headerRowIndex + 1;
                 const storesNeedingGeocode = [];
                 
+                // Debug: Log unique assignment status values for Tab 2
+                if (tabName === 'Tab2: Available') {
+                    const uniqueStatuses = new Set();
+                    for (let i = dataStartIndex; i < Math.min(dataStartIndex + 20, values.length); i++) {
+                        const row = values[i];
+                        if (row && row.length >= 7) {
+                            const status = row[6]?.toString().trim() || '';
+                            uniqueStatuses.add(status);
+                        }
+                    }
+                    console.log(`🔍 Tab2 unique Assignment Status values (first 20 rows):`, Array.from(uniqueStatuses));
+                }
+                
                 // First pass: collect all stores
                 for (let i = dataStartIndex; i < values.length; i++) {
                     const row = values[i];
@@ -385,8 +398,13 @@
                         const assignmentStatus = row[6]?.toString().trim() || '';
                         
                         // Apply status filter if specified (for Tab 2)
-                        if (statusFilter && assignmentStatus.toLowerCase() !== statusFilter.toLowerCase()) {
-                            continue;
+                        // Check if status filter matches (case insensitive, trim whitespace)
+                        if (statusFilter) {
+                            const normalizedStatus = assignmentStatus.toLowerCase().trim();
+                            const normalizedFilter = statusFilter.toLowerCase().trim();
+                            if (normalizedStatus !== normalizedFilter) {
+                                continue;
+                            }
                         }
                         
                         const lat = parseFloat(row[13]);
@@ -408,13 +426,8 @@
                             tabSource: tabName
                         };
                         
-                        if (!isNaN(lat) && !isNaN(lng) && lat !== 0 && lng !== 0) {
-                            // Has valid coordinates
-                            storeData.latitude = lat;
-                            storeData.longitude = lng;
-                            stores.push(storeData);
-                        } else if (fullAddress && fullAddress !== '') {
-                            // Needs geocoding
+                        // For Lowe's, always geocode - the coordinates in the sheet are unreliable
+                        if (fullAddress && fullAddress !== '') {
                             storesNeedingGeocode.push(storeData);
                         }
                     }
