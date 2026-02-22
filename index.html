@@ -29,8 +29,8 @@
             },
             LOWES: {
                 SHEET_ID: '1cDvbvf7RNPHzz6lQtKBwc-CaiN_CrNLxa89UYfcdeIM',
-                TAB1: 'Stores Sunly Can Ask For',
-                TAB2: 'Sunly Assigned & Available Stores',
+                TAB2: 'Stores Sunly Can Ask For',
+                TAB3: 'Sunly Assigned & Available Stores',
                 COLOR: '#004990',
                 LABEL: 'Lowe\'s'
             },
@@ -265,7 +265,9 @@
             const parseLowesData = (values, tabName, statusFilter = null) => {
                 const stores = [];
 
-                console.log(`📋 Lowe's (${tabName}) raw data rows:`, values.length);
+                console.log(`\n${'='.repeat(60)}`);
+                console.log(`📋 Lowe's (${tabName})`);
+                console.log(`   Total raw rows from sheet: ${values.length}`);
 
                 // Find header row (first row where col[0] contains "store")
                 let headerRowIndex = -1;
@@ -273,46 +275,59 @@
                     const row = values[i];
                     if (row && row.length > 0 && row[0]?.toString().toLowerCase().includes('store')) {
                         headerRowIndex = i;
-                        console.log(`✅ Found Lowe's header at row ${i}`);
+                        console.log(`   ✅ Header found at row index ${i}`);
                         break;
                     }
                 }
                 if (headerRowIndex === -1) {
-                    console.log(`❌ No header row found for Lowe's ${tabName}, using row 0 as header`);
+                    console.warn(`   ⚠️ No header row found, defaulting to row 0`);
                     headerRowIndex = 0;
                 }
 
-                // Debug: log column headers so we know the layout
                 const headerRow = values[headerRowIndex];
-                console.log(`🔍 Lowe's ${tabName} headers:`, headerRow);
+                console.log(`   📌 Headers (${headerRow?.length} cols):`, headerRow);
 
-                // Debug unique assignment status values (Tab 2)
-                if (tabName === 'Tab2: Available') {
-                    const uniqueStatuses = new Set();
-                    for (let i = headerRowIndex + 1; i < Math.min(headerRowIndex + 21, values.length); i++) {
-                        const row = values[i];
-                        if (row && row.length >= 7) uniqueStatuses.add(row[6]?.toString().trim() || '');
-                    }
-                    console.log(`🔍 Tab2 unique Assignment Status values (first 20 rows):`, Array.from(uniqueStatuses));
+                const dataRows = values.length - (headerRowIndex + 1);
+                console.log(`   📊 Data rows to process: ${dataRows}`);
+
+                // Collect all unique Assignment Status values
+                const allStatuses = new Set();
+                for (let i = headerRowIndex + 1; i < values.length; i++) {
+                    const row = values[i];
+                    if (row && row.length > 6) allStatuses.add(row[6]?.toString().trim() || '(empty)');
                 }
+                console.log(`   🏷️ All Assignment Status values found:`, Array.from(allStatuses));
+                console.log(`   🔎 Status filter applied: ${statusFilter || 'NONE (show all)'}`);
+
+                // Counters for diagnostics
+                let skippedTooShort = 0;
+                let skippedByStatusFilter = 0;
+                let skippedMissingCoords = 0;
+                let added = 0;
 
                 for (let i = headerRowIndex + 1; i < values.length; i++) {
                     const row = values[i];
-                    if (!row || row.length < 14) continue;
+
+                    if (!row || row.length < 14) {
+                        skippedTooShort++;
+                        continue;
+                    }
 
                     const assignmentStatus = row[6]?.toString().trim() || '';
 
-                    // Apply status filter if specified (for Tab 2)
                     if (statusFilter) {
-                        if (assignmentStatus.toLowerCase().trim() !== statusFilter.toLowerCase().trim()) continue;
+                        if (assignmentStatus.toLowerCase().trim() !== statusFilter.toLowerCase().trim()) {
+                            skippedByStatusFilter++;
+                            continue;
+                        }
                     }
 
-                    // ✅ Read lat/lng directly from columns 13 & 14
                     const lat = parseFloat(row[13]);
                     const lng = parseFloat(row[14]);
 
                     if (isNaN(lat) || isNaN(lng)) {
-                        console.warn(`⚠️ Missing or invalid coordinates for Lowe's store: ${row[1]} (${row[0]}) — skipping`);
+                        skippedMissingCoords++;
+                        console.warn(`   ⚠️ No coords — Store: "${row[1]}" #${row[0]} | lat col N: "${row[13]}" lng col O: "${row[14]}"`);
                         continue;
                     }
 
@@ -331,9 +346,16 @@
                         color: CONFIG.LOWES.COLOR,
                         tabSource: tabName
                     });
+                    added++;
                 }
 
-                console.log(`✅ Lowe's ${tabName} final count: ${stores.length} stores`);
+                console.log(`\n   📈 RESULTS for ${tabName}:`);
+                console.log(`      ✅ Added to map:          ${added}`);
+                console.log(`      ❌ Skipped (row too short): ${skippedTooShort}`);
+                console.log(`      ❌ Skipped (status filter): ${skippedByStatusFilter}`);
+                console.log(`      ❌ Skipped (no coords):     ${skippedMissingCoords}`);
+                console.log(`${'='.repeat(60)}\n`);
+
                 return stores;
             };
 
@@ -361,38 +383,38 @@
                         console.error('❌ Error fetching Home Depot data:', err);
                     }
 
-                    // Lowe's Tab 1: "Stores Sunly Can Ask For" (show ALL)
-                    try {
-                        const lowesTab1Url = `https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.LOWES.SHEET_ID}/values/${encodeURIComponent(CONFIG.LOWES.TAB1)}?key=${CONFIG.API_KEY}`;
-                        console.log("🔍 Fetching Lowe's Tab 1...");
-                        const lowesTab1Response = await fetch(lowesTab1Url);
-                        if (lowesTab1Response.ok) {
-                            const lowesTab1Data = await lowesTab1Response.json();
-                            if (lowesTab1Data.values?.length > 0) {
-                                const lowesTab1Stores = parseLowesData(lowesTab1Data.values, 'Tab1: Can Ask For', null);
-                                console.log(`✅ Lowe's Tab 1: ${lowesTab1Stores.length} stores loaded`);
-                                allStores.push(...lowesTab1Stores);
-                            }
-                        }
-                    } catch (err) {
-                        console.error("❌ Error fetching Lowe's Tab 1 data:", err);
-                    }
-
-                    // Lowe's Tab 2: "Sunly Assigned & Available Stores" (filter for "Available")
+                    // Lowe's Tab 2: "Stores Sunly Can Ask For" (show ALL)
                     try {
                         const lowesTab2Url = `https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.LOWES.SHEET_ID}/values/${encodeURIComponent(CONFIG.LOWES.TAB2)}?key=${CONFIG.API_KEY}`;
-                        console.log("🔍 Fetching Lowe's Tab 2...");
+                        console.log("🔍 Fetching Lowe's Tab 2 (Stores Sunly Can Ask For)...");
                         const lowesTab2Response = await fetch(lowesTab2Url);
                         if (lowesTab2Response.ok) {
                             const lowesTab2Data = await lowesTab2Response.json();
                             if (lowesTab2Data.values?.length > 0) {
-                                const lowesTab2Stores = parseLowesData(lowesTab2Data.values, 'Tab2: Available', 'Available');
+                                const lowesTab2Stores = parseLowesData(lowesTab2Data.values, 'Tab2: Can Ask For', null);
                                 console.log(`✅ Lowe's Tab 2: ${lowesTab2Stores.length} stores loaded`);
                                 allStores.push(...lowesTab2Stores);
                             }
                         }
                     } catch (err) {
                         console.error("❌ Error fetching Lowe's Tab 2 data:", err);
+                    }
+
+                    // Lowe's Tab 3: "Sunly Assigned & Available Stores" (show ALL)
+                    try {
+                        const lowesTab3Url = `https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.LOWES.SHEET_ID}/values/${encodeURIComponent(CONFIG.LOWES.TAB3)}?key=${CONFIG.API_KEY}`;
+                        console.log("🔍 Fetching Lowe's Tab 3 (Sunly Assigned & Available Stores)...");
+                        const lowesTab3Response = await fetch(lowesTab3Url);
+                        if (lowesTab3Response.ok) {
+                            const lowesTab3Data = await lowesTab3Response.json();
+                            if (lowesTab3Data.values?.length > 0) {
+                                const lowesTab3Stores = parseLowesData(lowesTab3Data.values, 'Tab3: Assigned & Available', null);
+                                console.log(`✅ Lowe's Tab 3: ${lowesTab3Stores.length} stores loaded`);
+                                allStores.push(...lowesTab3Stores);
+                            }
+                        }
+                    } catch (err) {
+                        console.error("❌ Error fetching Lowe's Tab 3 data:", err);
                     }
 
                     // ACE Hardware
