@@ -47,7 +47,6 @@
 
         let map = null;
         let markers = [];
-        let geocodeCache = {}; // Cache geocoded addresses to avoid re-geocoding
 
         const Search = ({ className }) => (
             <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -91,50 +90,8 @@
                 ace: true
             });
             const [selectedStore, setSelectedStore] = useState(null);
-            const [geocodingProgress, setGeocodingProgress] = useState(null);
             const mapRef = useRef(null);
             const [mapLoaded, setMapLoaded] = useState(false);
-
-            // Geocoding helper function
-            const geocodeAddress = async (address) => {
-                if (!address || address.trim() === '') {
-                    return null;
-                }
-
-                // Check cache first
-                if (geocodeCache[address]) {
-                    console.log(`📦 Using cached coordinates for: ${address}`);
-                    return geocodeCache[address];
-                }
-
-                try {
-                    const encodedAddress = encodeURIComponent(address);
-                    const url = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodedAddress}&key=${CONFIG.API_KEY}`;
-                    
-                    const response = await fetch(url);
-                    const data = await response.json();
-                    
-                    if (data.status === 'OK' && data.results && data.results.length > 0) {
-                        const location = data.results[0].geometry.location;
-                        const coords = {
-                            lat: location.lat,
-                            lng: location.lng
-                        };
-                        
-                        // Cache the result
-                        geocodeCache[address] = coords;
-                        
-                        console.log(`✅ Geocoded: ${address} → ${coords.lat}, ${coords.lng}`);
-                        return coords;
-                    } else {
-                        console.warn(`⚠️ Geocoding failed for: ${address} (${data.status})`);
-                        return null;
-                    }
-                } catch (error) {
-                    console.error(`❌ Geocoding error for ${address}:`, error);
-                    return null;
-                }
-            };
 
             const initializeMap = () => {
                 if (!window.google?.maps?.Map || !mapRef.current) {
@@ -156,51 +113,15 @@
                             strictBounds: false,
                         },
                         styles: [
-                            {
-                                featureType: 'poi',
-                                elementType: 'labels',
-                                stylers: [{ visibility: 'off' }]
-                            },
-                            {
-                                featureType: 'road',
-                                elementType: 'labels',
-                                stylers: [{ visibility: 'off' }]
-                            },
-                            {
-                                featureType: 'road.local',
-                                elementType: 'geometry',
-                                stylers: [{ visibility: 'off' }]
-                            },
-                            {
-                                featureType: 'road.arterial',
-                                elementType: 'geometry',
-                                stylers: [{ lightness: 20 }]
-                            },
-                            {
-                                featureType: 'water',
-                                elementType: 'labels',
-                                stylers: [{ visibility: 'off' }]
-                            },
-                            {
-                                featureType: 'administrative.locality',
-                                elementType: 'labels',
-                                stylers: [{ visibility: 'off' }]
-                            },
-                            {
-                                featureType: 'landscape',
-                                elementType: 'labels',
-                                stylers: [{ visibility: 'off' }]
-                            },
-                            {
-                                featureType: 'administrative.province',
-                                elementType: 'geometry.stroke',
-                                stylers: [{ color: '#999999', weight: 1 }]
-                            },
-                            {
-                                featureType: 'transit',
-                                elementType: 'all',
-                                stylers: [{ visibility: 'off' }]
-                            }
+                            { featureType: 'poi', elementType: 'labels', stylers: [{ visibility: 'off' }] },
+                            { featureType: 'road', elementType: 'labels', stylers: [{ visibility: 'off' }] },
+                            { featureType: 'road.local', elementType: 'geometry', stylers: [{ visibility: 'off' }] },
+                            { featureType: 'road.arterial', elementType: 'geometry', stylers: [{ lightness: 20 }] },
+                            { featureType: 'water', elementType: 'labels', stylers: [{ visibility: 'off' }] },
+                            { featureType: 'administrative.locality', elementType: 'labels', stylers: [{ visibility: 'off' }] },
+                            { featureType: 'landscape', elementType: 'labels', stylers: [{ visibility: 'off' }] },
+                            { featureType: 'administrative.province', elementType: 'geometry.stroke', stylers: [{ color: '#999999', weight: 1 }] },
+                            { featureType: 'transit', elementType: 'all', stylers: [{ visibility: 'off' }] }
                         ],
                         streetViewControl: false,
                         fullscreenControl: false,
@@ -216,17 +137,14 @@
             };
 
             const addMarkersToMap = (storeData) => {
-                if (!map || !window.google) {
-                    console.log('❌ Cannot add markers - map or google not available');
-                    return;
-                }
+                if (!map || !window.google) return;
 
                 console.log('🗺️ Adding markers for', storeData.length, 'stores');
 
                 markers.forEach(marker => marker.setMap(null));
                 markers = [];
 
-                storeData.forEach((store, index) => {
+                storeData.forEach((store) => {
                     const marker = new window.google.maps.Marker({
                         position: { lat: store.latitude, lng: store.longitude },
                         map: map,
@@ -241,15 +159,12 @@
                         }
                     });
 
-                    marker.addListener('click', () => {
-                        setSelectedStore(store);
-                    });
-
+                    marker.addListener('click', () => setSelectedStore(store));
                     markers.push(marker);
                 });
 
                 console.log('🎯 Total markers created:', markers.length);
-                
+
                 if (markers.length > 0) {
                     const bounds = new window.google.maps.LatLngBounds();
                     markers.forEach(marker => bounds.extend(marker.getPosition()));
@@ -259,7 +174,7 @@
 
             const parseHomeDepotData = (values) => {
                 const stores = [];
-                
+
                 let headerRowIndex = -1;
                 for (let i = 0; i < Math.min(3, values.length); i++) {
                     if (values[i] && values[i][0] && values[i][0].toString().toLowerCase().includes('status')) {
@@ -267,24 +182,21 @@
                         break;
                     }
                 }
-                
+
                 if (headerRowIndex === -1) {
                     console.log('❌ No header row found for Home Depot');
                     return stores;
                 }
-                
-                const dataStartIndex = headerRowIndex + 1;
-                
-                for (let i = dataStartIndex; i < values.length; i++) {
+
+                for (let i = headerRowIndex + 1; i < values.length; i++) {
                     const row = values[i];
-                    
                     if (row.length >= 20) {
                         const status = row[0]?.toString().trim().toLowerCase();
                         const lat = parseFloat(row[17]);
                         const lng = parseFloat(row[18]);
-                        
+
                         if (status === 'open' && !isNaN(lat) && !isNaN(lng)) {
-                            const store = {
+                            stores.push({
                                 status: 'Open',
                                 owner: row[1]?.toString().trim() || '',
                                 retailer: 'Home Depot',
@@ -297,50 +209,37 @@
                                 latitude: lat,
                                 longitude: lng,
                                 color: CONFIG.HOME_DEPOT.COLOR
-                            };
-                            stores.push(store);
+                            });
                         }
                     }
                 }
-                
+
                 return stores;
             };
 
             const parseAceData = (values) => {
                 const stores = [];
-                
-                console.log('📋 ACE raw data rows:', values.length);
-                
+
                 let headerRowIndex = -1;
                 for (let i = 0; i < Math.min(5, values.length); i++) {
                     const row = values[i];
-                    if (row && row.length > 0) {
-                        const cellText = row[0]?.toString().toLowerCase() || '';
-                        if (cellText.includes('status')) {
-                            headerRowIndex = i;
-                            console.log(`✅ Found ACE header at row ${i}`);
-                            break;
-                        }
+                    if (row && row.length > 0 && row[0]?.toString().toLowerCase().includes('status')) {
+                        headerRowIndex = i;
+                        break;
                     }
                 }
-                
-                if (headerRowIndex === -1) {
-                    console.log('❌ No header row found for ACE, using row 0 as header');
-                    headerRowIndex = 0;
-                }
-                
-                const dataStartIndex = headerRowIndex + 1;
-                
-                for (let i = dataStartIndex; i < values.length; i++) {
+
+                if (headerRowIndex === -1) headerRowIndex = 0;
+
+                for (let i = headerRowIndex + 1; i < values.length; i++) {
                     const row = values[i];
-                    
                     if (row && row.length >= 13) {
                         const status = row[0]?.toString().trim().toLowerCase();
                         const lat = parseFloat(row[8]);
                         const lng = parseFloat(row[9]);
-                        
+
                         if (status === 'open' && !isNaN(lat) && !isNaN(lng)) {
-                            const store = {
+                            stores.push({
                                 status: 'Open',
                                 dealer: row[1]?.toString().trim() || '',
                                 storeNumber: row[4]?.toString().trim() || '',
@@ -353,127 +252,87 @@
                                 longitude: lng,
                                 retailer: 'ACE Hardware',
                                 color: CONFIG.ACE.COLOR
-                            };
-                            stores.push(store);
+                            });
                         }
                     }
                 }
-                
+
                 console.log('✅ ACE stores parsed:', stores.length);
                 return stores;
             };
 
-            const parseLowesData = async (values, tabName, statusFilter = null) => {
+            // ─── Lowe's: now reads lat/lng directly from sheet (no geocoding) ───
+            const parseLowesData = (values, tabName, statusFilter = null) => {
                 const stores = [];
-                
+
                 console.log(`📋 Lowe's (${tabName}) raw data rows:`, values.length);
-                
+
+                // Find header row (first row where col[0] contains "store")
                 let headerRowIndex = -1;
                 for (let i = 0; i < Math.min(5, values.length); i++) {
                     const row = values[i];
-                    if (row && row.length > 0) {
-                        const cellText = row[0]?.toString().toLowerCase() || '';
-                        if (cellText.includes('store')) {
-                            headerRowIndex = i;
-                            console.log(`✅ Found Lowe's header at row ${i}`);
-                            break;
-                        }
+                    if (row && row.length > 0 && row[0]?.toString().toLowerCase().includes('store')) {
+                        headerRowIndex = i;
+                        console.log(`✅ Found Lowe's header at row ${i}`);
+                        break;
                     }
                 }
-                
                 if (headerRowIndex === -1) {
                     console.log(`❌ No header row found for Lowe's ${tabName}, using row 0 as header`);
                     headerRowIndex = 0;
                 }
-                
-                const dataStartIndex = headerRowIndex + 1;
-                const storesNeedingGeocode = [];
-                
-                // Debug: Log unique assignment status values for Tab 2
+
+                // Debug: log column headers so we know the layout
+                const headerRow = values[headerRowIndex];
+                console.log(`🔍 Lowe's ${tabName} headers:`, headerRow);
+
+                // Debug unique assignment status values (Tab 2)
                 if (tabName === 'Tab2: Available') {
                     const uniqueStatuses = new Set();
-                    for (let i = dataStartIndex; i < Math.min(dataStartIndex + 20, values.length); i++) {
+                    for (let i = headerRowIndex + 1; i < Math.min(headerRowIndex + 21, values.length); i++) {
                         const row = values[i];
-                        if (row && row.length >= 7) {
-                            const status = row[6]?.toString().trim() || '';
-                            uniqueStatuses.add(status);
-                        }
+                        if (row && row.length >= 7) uniqueStatuses.add(row[6]?.toString().trim() || '');
                     }
                     console.log(`🔍 Tab2 unique Assignment Status values (first 20 rows):`, Array.from(uniqueStatuses));
                 }
-                
-                // First pass: collect all stores
-                for (let i = dataStartIndex; i < values.length; i++) {
+
+                for (let i = headerRowIndex + 1; i < values.length; i++) {
                     const row = values[i];
-                    
-                    if (row && row.length >= 14) {
-                        const assignmentStatus = row[6]?.toString().trim() || '';
-                        
-                        // Apply status filter if specified (for Tab 2)
-                        // Check if status filter matches (case insensitive, trim whitespace)
-                        if (statusFilter) {
-                            const normalizedStatus = assignmentStatus.toLowerCase().trim();
-                            const normalizedFilter = statusFilter.toLowerCase().trim();
-                            if (normalizedStatus !== normalizedFilter) {
-                                continue;
-                            }
-                        }
-                        
-                        const lat = parseFloat(row[13]);
-                        const lng = parseFloat(row[14]);
-                        const fullAddress = row[8]?.toString().trim() || '';
-                        const storeNumber = row[0]?.toString().trim() || '';
-                        
-                        const storeData = {
-                            storeNumber: storeNumber,
-                            storeName: row[1]?.toString().trim() || '',
-                            state: row[2]?.toString().trim() || '',
-                            district: row[3]?.toString().trim() || '',
-                            assignmentStatus: assignmentStatus,
-                            address: fullAddress,
-                            city: '', // Not in sheet, will be in full address
-                            zip: '', // Not in sheet, will be in full address
-                            retailer: 'Lowe\'s',
-                            color: CONFIG.LOWES.COLOR,
-                            tabSource: tabName
-                        };
-                        
-                        // For Lowe's, always geocode - the coordinates in the sheet are unreliable
-                        if (fullAddress && fullAddress !== '') {
-                            storesNeedingGeocode.push(storeData);
-                        }
+                    if (!row || row.length < 14) continue;
+
+                    const assignmentStatus = row[6]?.toString().trim() || '';
+
+                    // Apply status filter if specified (for Tab 2)
+                    if (statusFilter) {
+                        if (assignmentStatus.toLowerCase().trim() !== statusFilter.toLowerCase().trim()) continue;
                     }
-                }
-                
-                console.log(`✅ Lowe's ${tabName}: ${stores.length} stores with coordinates, ${storesNeedingGeocode.length} need geocoding`);
-                
-                // Second pass: geocode stores without coordinates
-                if (storesNeedingGeocode.length > 0) {
-                    console.log(`🌍 Starting geocoding for ${storesNeedingGeocode.length} Lowe's stores...`);
-                    
-                    for (let i = 0; i < storesNeedingGeocode.length; i++) {
-                        const store = storesNeedingGeocode[i];
-                        setGeocodingProgress(`Geocoding Lowe's stores: ${i + 1}/${storesNeedingGeocode.length}`);
-                        
-                        const coords = await geocodeAddress(store.address);
-                        
-                        if (coords) {
-                            store.latitude = coords.lat;
-                            store.longitude = coords.lng;
-                            stores.push(store);
-                        } else {
-                            console.warn(`⚠️ Could not geocode Lowe's store: ${store.storeName} (${store.storeNumber})`);
-                        }
-                        
-                        // Rate limiting: wait 100ms between requests
-                        if (i < storesNeedingGeocode.length - 1) {
-                            await new Promise(resolve => setTimeout(resolve, 100));
-                        }
+
+                    // ✅ Read lat/lng directly from columns 13 & 14
+                    const lat = parseFloat(row[13]);
+                    const lng = parseFloat(row[14]);
+
+                    if (isNaN(lat) || isNaN(lng)) {
+                        console.warn(`⚠️ Missing or invalid coordinates for Lowe's store: ${row[1]} (${row[0]}) — skipping`);
+                        continue;
                     }
-                    
-                    setGeocodingProgress(null);
+
+                    stores.push({
+                        storeNumber: row[0]?.toString().trim() || '',
+                        storeName: row[1]?.toString().trim() || '',
+                        state: row[2]?.toString().trim() || '',
+                        district: row[3]?.toString().trim() || '',
+                        assignmentStatus: assignmentStatus,
+                        address: row[8]?.toString().trim() || '',
+                        city: '',
+                        zip: '',
+                        latitude: lat,
+                        longitude: lng,
+                        retailer: 'Lowe\'s',
+                        color: CONFIG.LOWES.COLOR,
+                        tabSource: tabName
+                    });
                 }
-                
+
                 console.log(`✅ Lowe's ${tabName} final count: ${stores.length} stores`);
                 return stores;
             };
@@ -485,16 +344,14 @@
 
                     const allStores = [];
 
-                    // Fetch Home Depot data
+                    // Home Depot
                     try {
-                        const hdEncodedSheetName = encodeURIComponent(CONFIG.HOME_DEPOT.SHEET_NAME);
-                        const hdUrl = `https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.HOME_DEPOT.SHEET_ID}/values/${hdEncodedSheetName}?key=${CONFIG.API_KEY}`;
+                        const hdUrl = `https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.HOME_DEPOT.SHEET_ID}/values/${encodeURIComponent(CONFIG.HOME_DEPOT.SHEET_NAME)}?key=${CONFIG.API_KEY}`;
                         console.log('🔍 Fetching Home Depot data...');
-                        
                         const hdResponse = await fetch(hdUrl);
                         if (hdResponse.ok) {
                             const hdData = await hdResponse.json();
-                            if (hdData.values && hdData.values.length > 0) {
+                            if (hdData.values?.length > 0) {
                                 const hdStores = parseHomeDepotData(hdData.values);
                                 console.log(`✅ Home Depot: ${hdStores.length} stores loaded`);
                                 allStores.push(...hdStores);
@@ -504,54 +361,48 @@
                         console.error('❌ Error fetching Home Depot data:', err);
                     }
 
-                    // Fetch Lowe's Tab 1: "Stores Sunly Can Ask For" (show ALL)
+                    // Lowe's Tab 1: "Stores Sunly Can Ask For" (show ALL)
                     try {
-                        const lowesTab1Encoded = encodeURIComponent(CONFIG.LOWES.TAB1);
-                        const lowesTab1Url = `https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.LOWES.SHEET_ID}/values/${lowesTab1Encoded}?key=${CONFIG.API_KEY}`;
-                        console.log('🔍 Fetching Lowe\'s Tab 1 (Stores Sunly Can Ask For)...');
-                        
+                        const lowesTab1Url = `https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.LOWES.SHEET_ID}/values/${encodeURIComponent(CONFIG.LOWES.TAB1)}?key=${CONFIG.API_KEY}`;
+                        console.log("🔍 Fetching Lowe's Tab 1...");
                         const lowesTab1Response = await fetch(lowesTab1Url);
                         if (lowesTab1Response.ok) {
                             const lowesTab1Data = await lowesTab1Response.json();
-                            if (lowesTab1Data.values && lowesTab1Data.values.length > 0) {
-                                const lowesTab1Stores = await parseLowesData(lowesTab1Data.values, 'Tab1: Can Ask For', null);
+                            if (lowesTab1Data.values?.length > 0) {
+                                const lowesTab1Stores = parseLowesData(lowesTab1Data.values, 'Tab1: Can Ask For', null);
                                 console.log(`✅ Lowe's Tab 1: ${lowesTab1Stores.length} stores loaded`);
                                 allStores.push(...lowesTab1Stores);
                             }
                         }
                     } catch (err) {
-                        console.error('❌ Error fetching Lowe\'s Tab 1 data:', err);
+                        console.error("❌ Error fetching Lowe's Tab 1 data:", err);
                     }
 
-                    // Fetch Lowe's Tab 2: "Sunly Assigned & Available Stores" (filter for "Available")
+                    // Lowe's Tab 2: "Sunly Assigned & Available Stores" (filter for "Available")
                     try {
-                        const lowesTab2Encoded = encodeURIComponent(CONFIG.LOWES.TAB2);
-                        const lowesTab2Url = `https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.LOWES.SHEET_ID}/values/${lowesTab2Encoded}?key=${CONFIG.API_KEY}`;
-                        console.log('🔍 Fetching Lowe\'s Tab 2 (Sunly Assigned & Available Stores)...');
-                        
+                        const lowesTab2Url = `https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.LOWES.SHEET_ID}/values/${encodeURIComponent(CONFIG.LOWES.TAB2)}?key=${CONFIG.API_KEY}`;
+                        console.log("🔍 Fetching Lowe's Tab 2...");
                         const lowesTab2Response = await fetch(lowesTab2Url);
                         if (lowesTab2Response.ok) {
                             const lowesTab2Data = await lowesTab2Response.json();
-                            if (lowesTab2Data.values && lowesTab2Data.values.length > 0) {
-                                const lowesTab2Stores = await parseLowesData(lowesTab2Data.values, 'Tab2: Available', 'Available');
+                            if (lowesTab2Data.values?.length > 0) {
+                                const lowesTab2Stores = parseLowesData(lowesTab2Data.values, 'Tab2: Available', 'Available');
                                 console.log(`✅ Lowe's Tab 2: ${lowesTab2Stores.length} stores loaded`);
                                 allStores.push(...lowesTab2Stores);
                             }
                         }
                     } catch (err) {
-                        console.error('❌ Error fetching Lowe\'s Tab 2 data:', err);
+                        console.error("❌ Error fetching Lowe's Tab 2 data:", err);
                     }
 
-                    // Fetch ACE data
+                    // ACE Hardware
                     try {
-                        const aceEncodedSheetName = encodeURIComponent(CONFIG.ACE.SHEET_NAME);
-                        const aceUrl = `https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.ACE.SHEET_ID}/values/${aceEncodedSheetName}?key=${CONFIG.API_KEY}`;
+                        const aceUrl = `https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.ACE.SHEET_ID}/values/${encodeURIComponent(CONFIG.ACE.SHEET_NAME)}?key=${CONFIG.API_KEY}`;
                         console.log('🔍 Fetching ACE data...');
-                        
                         const aceResponse = await fetch(aceUrl);
                         if (aceResponse.ok) {
                             const aceData = await aceResponse.json();
-                            if (aceData.values && aceData.values.length > 0) {
+                            if (aceData.values?.length > 0) {
                                 const aceStores = parseAceData(aceData.values);
                                 console.log(`✅ ACE: ${aceStores.length} stores loaded`);
                                 allStores.push(...aceStores);
@@ -562,19 +413,14 @@
                     }
 
                     console.log('📊 Total stores loaded:', allStores.length);
-                    
-                    if (allStores.length === 0) {
-                        throw new Error('No data loaded from any retailer');
-                    }
-                    
+
+                    if (allStores.length === 0) throw new Error('No data loaded from any retailer');
+
                     setStores(allStores);
                     setLastUpdated(new Date());
 
-                    if (mapLoaded) {
-                        const filtered = filterStores(allStores);
-                        addMarkersToMap(filtered);
-                    }
-                    
+                    if (mapLoaded) addMarkersToMap(filterStores(allStores));
+
                 } catch (err) {
                     console.error('❌ Error fetching data:', err);
                     setError(err.message);
@@ -585,80 +431,61 @@
 
             const filterStores = (storeList) => {
                 let filtered = storeList;
-                
-                // Apply retailer filter
+
                 filtered = filtered.filter(store => {
                     if (store.retailer === 'Home Depot') return retailerFilter.homeDepot;
-                    if (store.retailer === 'Lowe\'s') return retailerFilter.lowes;
+                    if (store.retailer === "Lowe's") return retailerFilter.lowes;
                     if (store.retailer === 'ACE Hardware') return retailerFilter.ace;
                     return true;
                 });
-                
-                // Apply search filter
+
                 if (searchTerm.trim()) {
                     filtered = filtered.filter(store => {
-                        const searchLower = searchTerm.toLowerCase();
+                        const s = searchTerm.toLowerCase();
                         return (
-                            (store.storeName || '').toLowerCase().includes(searchLower) ||
-                            (store.city || '').toLowerCase().includes(searchLower) ||
-                            (store.retailer || '').toLowerCase().includes(searchLower) ||
-                            (store.state || '').toLowerCase().includes(searchLower) ||
-                            (store.storeNumber || '').toLowerCase().includes(searchLower) ||
-                            (store.address || '').toLowerCase().includes(searchLower)
+                            (store.storeName || '').toLowerCase().includes(s) ||
+                            (store.city || '').toLowerCase().includes(s) ||
+                            (store.retailer || '').toLowerCase().includes(s) ||
+                            (store.state || '').toLowerCase().includes(s) ||
+                            (store.storeNumber || '').toLowerCase().includes(s) ||
+                            (store.address || '').toLowerCase().includes(s)
                         );
                     });
                 }
-                
-                // Apply state filter
+
                 if (stateFilter !== 'all') {
                     filtered = filtered.filter(store => store.state === stateFilter);
                 }
-                
+
                 return filtered;
             };
 
-            const filteredStores = useMemo(() => {
-                return filterStores(stores);
-            }, [stores, searchTerm, stateFilter, retailerFilter]);
+            const filteredStores = useMemo(() => filterStores(stores), [stores, searchTerm, stateFilter, retailerFilter]);
 
-            const uniqueStates = [...new Set(stores.map(store => store.state))].filter(state => state && state.trim() !== '').sort();
+            const uniqueStates = [...new Set(stores.map(store => store.state))].filter(s => s && s.trim() !== '').sort();
 
-            const storeCounts = useMemo(() => {
-                return {
-                    homeDepot: stores.filter(s => s.retailer === 'Home Depot').length,
-                    lowes: stores.filter(s => s.retailer === 'Lowe\'s').length,
-                    ace: stores.filter(s => s.retailer === 'ACE Hardware').length
-                };
-            }, [stores]);
+            const storeCounts = useMemo(() => ({
+                homeDepot: stores.filter(s => s.retailer === 'Home Depot').length,
+                lowes: stores.filter(s => s.retailer === "Lowe's").length,
+                ace: stores.filter(s => s.retailer === 'ACE Hardware').length
+            }), [stores]);
 
             useEffect(() => {
                 let attempts = 0;
-                const maxAttempts = 50;
-
                 const checkGoogleMaps = () => {
                     attempts++;
-                    
                     if (window.google?.maps?.Map && mapRef.current) {
                         const success = initializeMap();
-                        if (success) {
-                            return;
-                        }
+                        if (success) return;
                     }
-                    
-                    if (attempts < maxAttempts) {
-                        setTimeout(checkGoogleMaps, 100);
-                    } else {
-                        setError('Failed to load Google Maps. Please refresh the page.');
-                    }
+                    if (attempts < 50) setTimeout(checkGoogleMaps, 100);
+                    else setError('Failed to load Google Maps. Please refresh the page.');
                 };
-                
                 checkGoogleMaps();
             }, []);
 
             useEffect(() => {
-                if (mapLoaded) {
-                    addMarkersToMap(filteredStores);
-                }
+                if (mapLoaded) addMarkersToMap(filteredStores);
             }, [mapLoaded, filteredStores]);
 
             useEffect(() => {
@@ -692,13 +519,6 @@
                             </div>
                         )}
 
-                        {geocodingProgress && (
-                            <div className="mb-1 p-3 bg-blue-50 border border-blue-200 rounded-lg flex items-center gap-2">
-                                <Loader className="w-5 h-5 animate-spin text-blue-600 flex-shrink-0" />
-                                <span className="text-blue-700 text-base">{geocodingProgress}</span>
-                            </div>
-                        )}
-
                         {lastUpdated && (
                             <div className="mb-1 text-xs md:text-sm text-gray-600">
                                 Last updated: {lastUpdated.toLocaleString()}
@@ -710,82 +530,49 @@
 
                         {/* Retailer Summary */}
                         <div className="flex flex-wrap gap-2 mb-2">
-                            <div style={{
-                                padding: '0.5rem',
-                                borderRadius: '0.5rem',
-                                border: '1px solid #F96302',
-                                background: 'linear-gradient(135deg, #FFF3E0 0%, #FFE0B2 100%)',
-                                width: '140px'
-                            }}>
-                                <div style={{display: 'flex', alignItems: 'center', gap: '0.375rem'}}>
-                                    <div style={{width: '0.75rem', height: '0.75rem', borderRadius: '50%', backgroundColor: '#F96302'}}></div>
-                                    <span style={{color: '#F96302', fontWeight: '500', fontSize: '0.875rem'}}>Home Depot</span>
+                            <div style={{ padding: '0.5rem', borderRadius: '0.5rem', border: '1px solid #F96302', background: 'linear-gradient(135deg, #FFF3E0 0%, #FFE0B2 100%)', width: '140px' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.375rem' }}>
+                                    <div style={{ width: '0.75rem', height: '0.75rem', borderRadius: '50%', backgroundColor: '#F96302' }}></div>
+                                    <span style={{ color: '#F96302', fontWeight: '500', fontSize: '0.875rem' }}>Home Depot</span>
                                 </div>
-                                <div style={{fontSize: '1.25rem', fontWeight: 'bold', marginTop: '0.25rem', color: '#F96302'}}>{storeCounts.homeDepot}</div>
+                                <div style={{ fontSize: '1.25rem', fontWeight: 'bold', marginTop: '0.25rem', color: '#F96302' }}>{storeCounts.homeDepot}</div>
                             </div>
-                            
-                            <div style={{
-                                padding: '0.5rem',
-                                borderRadius: '0.5rem',
-                                border: '1px solid #004990',
-                                background: 'linear-gradient(135deg, #E3F2FD 0%, #BBDEFB 100%)',
-                                width: '140px'
-                            }}>
-                                <div style={{display: 'flex', alignItems: 'center', gap: '0.375rem'}}>
-                                    <div style={{width: '0.75rem', height: '0.75rem', borderRadius: '50%', backgroundColor: '#004990'}}></div>
-                                    <span style={{color: '#004990', fontWeight: '500', fontSize: '0.875rem'}}>Lowe's</span>
+
+                            <div style={{ padding: '0.5rem', borderRadius: '0.5rem', border: '1px solid #004990', background: 'linear-gradient(135deg, #E3F2FD 0%, #BBDEFB 100%)', width: '140px' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.375rem' }}>
+                                    <div style={{ width: '0.75rem', height: '0.75rem', borderRadius: '50%', backgroundColor: '#004990' }}></div>
+                                    <span style={{ color: '#004990', fontWeight: '500', fontSize: '0.875rem' }}>Lowe's</span>
                                 </div>
-                                <div style={{fontSize: '1.25rem', fontWeight: 'bold', marginTop: '0.25rem', color: '#004990'}}>{storeCounts.lowes}</div>
+                                <div style={{ fontSize: '1.25rem', fontWeight: 'bold', marginTop: '0.25rem', color: '#004990' }}>{storeCounts.lowes}</div>
                             </div>
-                            
-                            <div style={{
-                                padding: '0.5rem',
-                                borderRadius: '0.5rem',
-                                border: '1px solid #ED1C24',
-                                background: 'linear-gradient(135deg, #FFEBEE 0%, #FFCDD2 100%)',
-                                width: '140px'
-                            }}>
-                                <div style={{display: 'flex', alignItems: 'center', gap: '0.375rem'}}>
-                                    <div style={{width: '0.75rem', height: '0.75rem', borderRadius: '50%', backgroundColor: '#ED1C24'}}></div>
-                                    <span style={{color: '#ED1C24', fontWeight: '500', fontSize: '0.875rem'}}>ACE Hardware</span>
+
+                            <div style={{ padding: '0.5rem', borderRadius: '0.5rem', border: '1px solid #ED1C24', background: 'linear-gradient(135deg, #FFEBEE 0%, #FFCDD2 100%)', width: '140px' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.375rem' }}>
+                                    <div style={{ width: '0.75rem', height: '0.75rem', borderRadius: '50%', backgroundColor: '#ED1C24' }}></div>
+                                    <span style={{ color: '#ED1C24', fontWeight: '500', fontSize: '0.875rem' }}>ACE Hardware</span>
                                 </div>
-                                <div style={{fontSize: '1.25rem', fontWeight: 'bold', marginTop: '0.25rem', color: '#ED1C24'}}>{storeCounts.ace}</div>
+                                <div style={{ fontSize: '1.25rem', fontWeight: 'bold', marginTop: '0.25rem', color: '#ED1C24' }}>{storeCounts.ace}</div>
                             </div>
                         </div>
 
                         {/* Retailer Toggle Filters */}
                         <div className="flex flex-wrap gap-2 mb-2">
                             <label className="flex items-center gap-2 px-3 py-1.5 bg-gray-50 rounded-lg border cursor-pointer hover:bg-gray-100">
-                                <input
-                                    type="checkbox"
-                                    checked={retailerFilter.homeDepot}
-                                    onChange={(e) => setRetailerFilter(prev => ({...prev, homeDepot: e.target.checked}))}
-                                    className="w-4 h-4"
-                                />
-                                <span className="text-sm font-medium" style={{color: '#F96302'}}>Show Home Depot</span>
+                                <input type="checkbox" checked={retailerFilter.homeDepot} onChange={(e) => setRetailerFilter(prev => ({ ...prev, homeDepot: e.target.checked }))} className="w-4 h-4" />
+                                <span className="text-sm font-medium" style={{ color: '#F96302' }}>Show Home Depot</span>
                             </label>
-                            
+
                             <label className="flex items-center gap-2 px-3 py-1.5 bg-gray-50 rounded-lg border cursor-pointer hover:bg-gray-100">
-                                <input
-                                    type="checkbox"
-                                    checked={retailerFilter.lowes}
-                                    onChange={(e) => setRetailerFilter(prev => ({...prev, lowes: e.target.checked}))}
-                                    className="w-4 h-4"
-                                />
-                                <span className="text-sm font-medium" style={{color: '#004990'}}>Show Lowe's</span>
+                                <input type="checkbox" checked={retailerFilter.lowes} onChange={(e) => setRetailerFilter(prev => ({ ...prev, lowes: e.target.checked }))} className="w-4 h-4" />
+                                <span className="text-sm font-medium" style={{ color: '#004990' }}>Show Lowe's</span>
                             </label>
-                            
+
                             <label className="flex items-center gap-2 px-3 py-1.5 bg-gray-50 rounded-lg border cursor-pointer hover:bg-gray-100">
-                                <input
-                                    type="checkbox"
-                                    checked={retailerFilter.ace}
-                                    onChange={(e) => setRetailerFilter(prev => ({...prev, ace: e.target.checked}))}
-                                    className="w-4 h-4"
-                                />
-                                <span className="text-sm font-medium" style={{color: '#ED1C24'}}>Show ACE Hardware</span>
+                                <input type="checkbox" checked={retailerFilter.ace} onChange={(e) => setRetailerFilter(prev => ({ ...prev, ace: e.target.checked }))} className="w-4 h-4" />
+                                <span className="text-sm font-medium" style={{ color: '#ED1C24' }}>Show ACE Hardware</span>
                             </label>
                         </div>
-                        
+
                         {/* Search and State Filters */}
                         <div className="flex flex-col lg:flex-row gap-2 md:gap-3 items-stretch lg:items-center">
                             <div className="flex items-center gap-2 flex-1 min-w-0">
@@ -798,7 +585,7 @@
                                     className="flex-1 px-2 py-1.5 border rounded-lg text-sm touch-manipulation"
                                 />
                             </div>
-                            
+
                             <div className="flex flex-wrap lg:flex-nowrap items-center gap-2">
                                 <select
                                     value={stateFilter}
@@ -806,16 +593,13 @@
                                     className="px-2 py-1.5 border rounded-lg text-sm touch-manipulation min-w-0"
                                 >
                                     <option value="all">All States ({stores.length})</option>
-                                    {uniqueStates.map(state => {
-                                        const stateCount = stores.filter(store => store.state === state).length;
-                                        return (
-                                            <option key={state} value={state}>
-                                                {state || 'Unknown'} ({stateCount})
-                                            </option>
-                                        );
-                                    })}
+                                    {uniqueStates.map(state => (
+                                        <option key={state} value={state}>
+                                            {state || 'Unknown'} ({stores.filter(s => s.state === state).length})
+                                        </option>
+                                    ))}
                                 </select>
-                                
+
                                 <div className="text-sm text-gray-600 whitespace-nowrap font-medium">
                                     Showing {filteredStores.length} of {stores.length} stores
                                 </div>
@@ -826,7 +610,7 @@
                     <div className="flex-1 flex">
                         <div className="flex-1 relative">
                             <div ref={mapRef} id="map" className="w-full h-full"></div>
-                            
+
                             {loading && (
                                 <div className="absolute inset-0 bg-white bg-opacity-90 flex items-center justify-center z-10">
                                     <div className="flex flex-col items-center gap-4 p-6 bg-white rounded-xl shadow-lg border">
@@ -836,7 +620,7 @@
                                 </div>
                             )}
                         </div>
-                        
+
                         {selectedStore && (
                             <div className="w-full sm:w-72 md:w-80 bg-white shadow-lg border-l overflow-y-auto">
                                 <div className="p-4">
@@ -847,63 +631,52 @@
                                         <button
                                             onClick={() => setSelectedStore(null)}
                                             className="text-gray-400 hover:text-gray-600 text-xl ml-3 p-1 hover:bg-gray-100 rounded flex-shrink-0"
-                                            title="Close panel"
-                                        >
-                                            ×
-                                        </button>
+                                        >×</button>
                                     </div>
-                                    
+
                                     <div className="space-y-4">
                                         <div>
                                             <div className="text-xs font-medium text-gray-700 mb-2">Retailer</div>
                                             <div className="inline-block px-3 py-1 rounded-full text-sm font-medium" style={{
-                                                backgroundColor: selectedStore.retailer === 'Home Depot' ? '#FFF3E0' : selectedStore.retailer === 'Lowe\'s' ? '#E3F2FD' : '#FFEBEE',
+                                                backgroundColor: selectedStore.retailer === 'Home Depot' ? '#FFF3E0' : selectedStore.retailer === "Lowe's" ? '#E3F2FD' : '#FFEBEE',
                                                 color: selectedStore.color
                                             }}>
                                                 {selectedStore.retailer}
                                             </div>
                                         </div>
-                                        
+
                                         {selectedStore.status && (
                                             <div>
                                                 <div className="text-xs font-medium text-gray-700 mb-2">Status</div>
                                                 <div className="text-sm text-gray-900">{selectedStore.status}</div>
                                             </div>
                                         )}
-                                        
+
                                         {selectedStore.assignmentStatus && (
                                             <div>
                                                 <div className="text-xs font-medium text-gray-700 mb-2">Assignment Status</div>
                                                 <div className="text-sm text-gray-900">{selectedStore.assignmentStatus}</div>
                                             </div>
                                         )}
-                                        
+
                                         <div>
                                             <div className="text-xs font-medium text-gray-700 mb-2">Store Number</div>
                                             <div className="text-sm text-gray-900">{selectedStore.storeNumber}</div>
                                         </div>
-                                        
+
                                         <div>
                                             <div className="text-xs font-medium text-gray-700 mb-2">Address</div>
                                             <div className="text-sm text-gray-900 leading-relaxed">
-                                                {selectedStore.retailer === 'ACE Hardware' ? (
-                                                    selectedStore.address
-                                                ) : selectedStore.retailer === 'Lowe\'s' ? (
+                                                {selectedStore.retailer === 'ACE Hardware' || selectedStore.retailer === "Lowe's" ? (
                                                     selectedStore.address
                                                 ) : (
                                                     <>
                                                         {selectedStore.address}
                                                         {selectedStore.city && selectedStore.city.trim() !== '' && (
-                                                            <>
-                                                                <br/>
-                                                                {selectedStore.city}, {selectedStore.state} {selectedStore.zip}
-                                                            </>
+                                                            <><br />{selectedStore.city}, {selectedStore.state} {selectedStore.zip}</>
                                                         )}
                                                         {(!selectedStore.city || selectedStore.city.trim() === '') && selectedStore.state && (
-                                                            <>
-                                                                <br/>
-                                                                {selectedStore.state}
-                                                            </>
+                                                            <><br />{selectedStore.state}</>
                                                         )}
                                                     </>
                                                 )}
