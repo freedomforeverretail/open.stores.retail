@@ -12,6 +12,68 @@
     <style>
         body { margin: 0; font-family: system-ui, -apple-system, sans-serif; }
         #map { height: 100%; width: 100%; }
+
+        /* Dark mode global overrides */
+        .dark-mode { background: #0f1117; color: #e2e8f0; }
+        .dark-mode .bg-white { background-color: #1a1d27 !important; }
+        .dark-mode .bg-gray-50 { background-color: #0f1117 !important; }
+        .dark-mode .bg-gray-100 { background-color: #252836 !important; }
+        .dark-mode .border-b { border-color: #2d3148 !important; }
+        .dark-mode .border-l { border-color: #2d3148 !important; }
+        .dark-mode .border { border-color: #2d3148 !important; }
+        .dark-mode .text-gray-900 { color: #f1f5f9 !important; }
+        .dark-mode .text-gray-700 { color: #94a3b8 !important; }
+        .dark-mode .text-gray-600 { color: #64748b !important; }
+        .dark-mode .text-gray-400 { color: #475569 !important; }
+        .dark-mode .shadow-sm { box-shadow: 0 1px 2px rgba(0,0,0,0.4) !important; }
+        .dark-mode .shadow-lg { box-shadow: 0 10px 15px rgba(0,0,0,0.5) !important; }
+        .dark-mode input, .dark-mode select {
+            background-color: #252836 !important;
+            color: #e2e8f0 !important;
+            border-color: #2d3148 !important;
+        }
+        .dark-mode input::placeholder { color: #475569 !important; }
+        .dark-mode .hover\:bg-gray-100:hover { background-color: #252836 !important; }
+        .dark-mode .bg-red-50 { background-color: #2d1515 !important; }
+        .dark-mode .border-red-200 { border-color: #7f1d1d !important; }
+
+        /* Dark mode toggle button */
+        .dark-toggle {
+            width: 52px;
+            height: 28px;
+            border-radius: 14px;
+            border: none;
+            cursor: pointer;
+            position: relative;
+            transition: background 0.3s ease;
+            flex-shrink: 0;
+        }
+        .dark-toggle-knob {
+            position: absolute;
+            top: 3px;
+            width: 22px;
+            height: 22px;
+            border-radius: 50%;
+            background: white;
+            transition: left 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.3);
+        }
+        .dark-toggle.light { background: #cbd5e1; }
+        .dark-toggle.light .dark-toggle-knob { left: 3px; }
+        .dark-toggle.dark  { background: #6366f1; }
+        .dark-toggle.dark  .dark-toggle-knob { left: 27px; }
+
+        /* Status badge colors */
+        .status-open     { background: #dcfce7; color: #166534; }
+        .status-staffed  { background: #fef9c3; color: #854d0e; }
+        .status-reserved { background: #fee2e2; color: #991b1b; }
+        .dark-mode .status-open     { background: #14532d; color: #86efac; }
+        .dark-mode .status-staffed  { background: #422006; color: #fde68a; }
+        .dark-mode .status-reserved { background: #450a0a; color: #fca5a5; }
     </style>
 </head>
 <body>
@@ -19,6 +81,8 @@
 
     <script type="text/babel">
         const { useState, useEffect, useMemo, useRef } = React;
+
+        const ALLOWED_STATUSES = ['open', 'staffed', 'reserved'];
 
         const CONFIG = {
             HOME_DEPOT: {
@@ -32,7 +96,7 @@
                 TAB2: 'Stores Sunly Can Ask For',
                 TAB3: 'Sunly Assigned & Available Stores',
                 COLOR: '#004990',
-                LABEL: 'Lowe\'s'
+                LABEL: "Lowe's"
             },
             ACE: {
                 SHEET_ID: '1EWvOJnVDsptBvjStdgk5tcIcfWnVTa1vG1cyA9QNozw',
@@ -44,6 +108,36 @@
             REFRESH_MINUTES: 30,
             RESERVE_URL: 'https://docs.google.com/forms/d/e/1FAIpQLSdgGe9EyaLg8RcbaRdKFTyP3PJnaoR8UrmxKMi0c_MGQ6o8FQ/viewform'
         };
+
+        const DARK_MAP_STYLES = [
+            { elementType: 'geometry', stylers: [{ color: '#1a1d27' }] },
+            { elementType: 'labels.text.stroke', stylers: [{ color: '#1a1d27' }] },
+            { elementType: 'labels.text.fill', stylers: [{ color: '#6b7280' }] },
+            { featureType: 'administrative', elementType: 'geometry.stroke', stylers: [{ color: '#374151' }] },
+            { featureType: 'administrative.land_parcel', elementType: 'labels.text.fill', stylers: [{ color: '#4b5563' }] },
+            { featureType: 'poi', elementType: 'labels', stylers: [{ visibility: 'off' }] },
+            { featureType: 'road', elementType: 'geometry', stylers: [{ color: '#252836' }] },
+            { featureType: 'road', elementType: 'labels', stylers: [{ visibility: 'off' }] },
+            { featureType: 'road.local', elementType: 'geometry', stylers: [{ visibility: 'off' }] },
+            { featureType: 'road.arterial', elementType: 'geometry', stylers: [{ color: '#2d3148' }] },
+            { featureType: 'transit', elementType: 'all', stylers: [{ visibility: 'off' }] },
+            { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#0d1117' }] },
+            { featureType: 'water', elementType: 'labels', stylers: [{ visibility: 'off' }] },
+            { featureType: 'administrative.province', elementType: 'geometry.stroke', stylers: [{ color: '#374151', weight: 1 }] },
+            { featureType: 'landscape', elementType: 'labels', stylers: [{ visibility: 'off' }] },
+        ];
+
+        const LIGHT_MAP_STYLES = [
+            { featureType: 'poi', elementType: 'labels', stylers: [{ visibility: 'off' }] },
+            { featureType: 'road', elementType: 'labels', stylers: [{ visibility: 'off' }] },
+            { featureType: 'road.local', elementType: 'geometry', stylers: [{ visibility: 'off' }] },
+            { featureType: 'road.arterial', elementType: 'geometry', stylers: [{ lightness: 20 }] },
+            { featureType: 'water', elementType: 'labels', stylers: [{ visibility: 'off' }] },
+            { featureType: 'administrative.locality', elementType: 'labels', stylers: [{ visibility: 'off' }] },
+            { featureType: 'landscape', elementType: 'labels', stylers: [{ visibility: 'off' }] },
+            { featureType: 'administrative.province', elementType: 'geometry.stroke', stylers: [{ color: '#999999', weight: 1 }] },
+            { featureType: 'transit', elementType: 'all', stylers: [{ visibility: 'off' }] }
+        ];
 
         let map = null;
         let markers = [];
@@ -73,8 +167,16 @@
             </svg>
         );
 
+        const statusBadgeClass = (status) => {
+            const s = (status || '').toLowerCase();
+            if (s === 'open') return 'status-open';
+            if (s === 'staffed') return 'status-staffed';
+            if (s === 'reserved') return 'status-reserved';
+            return '';
+        };
+
         window.initMap = function() {
-            console.log('✅ Google Maps API loaded successfully');
+            console.log('✅ Google Maps API loaded');
         };
 
         const MultiRetailerMap = () => {
@@ -84,6 +186,7 @@
             const [lastUpdated, setLastUpdated] = useState(null);
             const [searchTerm, setSearchTerm] = useState('');
             const [stateFilter, setStateFilter] = useState('all');
+            const [darkMode, setDarkMode] = useState(false);
             const [retailerFilter, setRetailerFilter] = useState({
                 homeDepot: true,
                 lowes: true,
@@ -93,100 +196,86 @@
             const mapRef = useRef(null);
             const [mapLoaded, setMapLoaded] = useState(false);
 
-            const initializeMap = () => {
-                if (!window.google?.maps?.Map || !mapRef.current) {
-                    return false;
+            // Apply dark mode class to body + root
+            useEffect(() => {
+                const root = document.getElementById('root');
+                if (darkMode) {
+                    document.body.style.background = '#0f1117';
+                    root.classList.add('dark-mode');
+                } else {
+                    document.body.style.background = '';
+                    root.classList.remove('dark-mode');
                 }
+                if (map) {
+                    map.setOptions({ styles: darkMode ? DARK_MAP_STYLES : LIGHT_MAP_STYLES });
+                }
+            }, [darkMode]);
 
+            const initializeMap = () => {
+                if (!window.google?.maps?.Map || !mapRef.current) return false;
                 try {
                     map = new window.google.maps.Map(mapRef.current, {
                         zoom: 4,
                         center: { lat: 39.8283, lng: -98.5795 },
                         mapTypeId: 'roadmap',
                         restriction: {
-                            latLngBounds: {
-                                north: 49.0,
-                                south: 25.0,
-                                west: -125.0,
-                                east: -66.0,
-                            },
+                            latLngBounds: { north: 49.0, south: 25.0, west: -125.0, east: -66.0 },
                             strictBounds: false,
                         },
-                        styles: [
-                            { featureType: 'poi', elementType: 'labels', stylers: [{ visibility: 'off' }] },
-                            { featureType: 'road', elementType: 'labels', stylers: [{ visibility: 'off' }] },
-                            { featureType: 'road.local', elementType: 'geometry', stylers: [{ visibility: 'off' }] },
-                            { featureType: 'road.arterial', elementType: 'geometry', stylers: [{ lightness: 20 }] },
-                            { featureType: 'water', elementType: 'labels', stylers: [{ visibility: 'off' }] },
-                            { featureType: 'administrative.locality', elementType: 'labels', stylers: [{ visibility: 'off' }] },
-                            { featureType: 'landscape', elementType: 'labels', stylers: [{ visibility: 'off' }] },
-                            { featureType: 'administrative.province', elementType: 'geometry.stroke', stylers: [{ color: '#999999', weight: 1 }] },
-                            { featureType: 'transit', elementType: 'all', stylers: [{ visibility: 'off' }] }
-                        ],
+                        styles: darkMode ? DARK_MAP_STYLES : LIGHT_MAP_STYLES,
                         streetViewControl: false,
                         fullscreenControl: false,
                         mapTypeControl: false
                     });
-
                     setMapLoaded(true);
                     return true;
-                } catch (error) {
-                    console.error('❌ Error initializing map:', error);
+                } catch (err) {
+                    console.error('❌ Map init error:', err);
                     return false;
                 }
             };
 
             const addMarkersToMap = (storeData) => {
                 if (!map || !window.google) return;
-
-                console.log('🗺️ Adding markers for', storeData.length, 'stores');
-
-                markers.forEach(marker => marker.setMap(null));
+                markers.forEach(m => m.setMap(null));
                 markers = [];
 
-                storeData.forEach((store) => {
+                storeData.forEach(store => {
                     const marker = new window.google.maps.Marker({
                         position: { lat: store.latitude, lng: store.longitude },
-                        map: map,
+                        map,
                         title: `${store.storeName} - ${store.retailer}`,
                         icon: {
                             path: window.google.maps.SymbolPath.CIRCLE,
                             fillColor: store.color,
                             fillOpacity: 1,
-                            strokeColor: '#ffffff',
-                            strokeWeight: 1,
+                            strokeColor: darkMode ? '#1a1d27' : '#ffffff',
+                            strokeWeight: 1.5,
                             scale: 6
                         }
                     });
-
                     marker.addListener('click', () => setSelectedStore(store));
                     markers.push(marker);
                 });
 
-                console.log('🎯 Total markers created:', markers.length);
-
                 if (markers.length > 0) {
                     const bounds = new window.google.maps.LatLngBounds();
-                    markers.forEach(marker => bounds.extend(marker.getPosition()));
+                    markers.forEach(m => bounds.extend(m.getPosition()));
                     map.fitBounds(bounds);
                 }
             };
 
+            // ─── Home Depot: include open, staffed, reserved ───
             const parseHomeDepotData = (values) => {
                 const stores = [];
-
                 let headerRowIndex = -1;
                 for (let i = 0; i < Math.min(3, values.length); i++) {
-                    if (values[i] && values[i][0] && values[i][0].toString().toLowerCase().includes('status')) {
+                    if (values[i]?.[0]?.toString().toLowerCase().includes('status')) {
                         headerRowIndex = i;
                         break;
                     }
                 }
-
-                if (headerRowIndex === -1) {
-                    console.log('❌ No header row found for Home Depot');
-                    return stores;
-                }
+                if (headerRowIndex === -1) return stores;
 
                 for (let i = headerRowIndex + 1; i < values.length; i++) {
                     const row = values[i];
@@ -195,9 +284,9 @@
                         const lat = parseFloat(row[17]);
                         const lng = parseFloat(row[18]);
 
-                        if (status === 'open' && !isNaN(lat) && !isNaN(lng)) {
+                        if (ALLOWED_STATUSES.includes(status) && !isNaN(lat) && !isNaN(lng)) {
                             stores.push({
-                                status: 'Open',
+                                status: row[0]?.toString().trim(),
                                 owner: row[1]?.toString().trim() || '',
                                 retailer: 'Home Depot',
                                 storeNumber: row[11]?.toString().trim() || '',
@@ -213,22 +302,19 @@
                         }
                     }
                 }
-
                 return stores;
             };
 
+            // ─── ACE: include open, staffed, reserved ───
             const parseAceData = (values) => {
                 const stores = [];
-
                 let headerRowIndex = -1;
                 for (let i = 0; i < Math.min(5, values.length); i++) {
-                    const row = values[i];
-                    if (row && row.length > 0 && row[0]?.toString().toLowerCase().includes('status')) {
+                    if (values[i]?.[0]?.toString().toLowerCase().includes('status')) {
                         headerRowIndex = i;
                         break;
                     }
                 }
-
                 if (headerRowIndex === -1) headerRowIndex = 0;
 
                 for (let i = headerRowIndex + 1; i < values.length; i++) {
@@ -238,9 +324,9 @@
                         const lat = parseFloat(row[8]);
                         const lng = parseFloat(row[9]);
 
-                        if (status === 'open' && !isNaN(lat) && !isNaN(lng)) {
+                        if (ALLOWED_STATUSES.includes(status) && !isNaN(lat) && !isNaN(lng)) {
                             stores.push({
-                                status: 'Open',
+                                status: row[0]?.toString().trim(),
                                 dealer: row[1]?.toString().trim() || '',
                                 storeNumber: row[4]?.toString().trim() || '',
                                 storeName: row[6]?.toString().trim() || '',
@@ -256,106 +342,48 @@
                         }
                     }
                 }
-
-                console.log('✅ ACE stores parsed:', stores.length);
                 return stores;
             };
 
-            // ─── Lowe's: now reads lat/lng directly from sheet (no geocoding) ───
+            // ─── Lowe's: unchanged, reads lat/lng directly, no status filter ───
             const parseLowesData = (values, tabName, statusFilter = null) => {
                 const stores = [];
-
-                console.log(`\n${'='.repeat(60)}`);
-                console.log(`📋 Lowe's (${tabName})`);
-                console.log(`   Total raw rows from sheet: ${values.length}`);
-
-                // Find header row (first row where col[0] contains "store")
                 let headerRowIndex = -1;
                 for (let i = 0; i < Math.min(5, values.length); i++) {
-                    const row = values[i];
-                    if (row && row.length > 0 && row[0]?.toString().toLowerCase().includes('store')) {
+                    if (values[i]?.[0]?.toString().toLowerCase().includes('store')) {
                         headerRowIndex = i;
-                        console.log(`   ✅ Header found at row index ${i}`);
                         break;
                     }
                 }
-                if (headerRowIndex === -1) {
-                    console.warn(`   ⚠️ No header row found, defaulting to row 0`);
-                    headerRowIndex = 0;
-                }
-
-                const headerRow = values[headerRowIndex];
-                console.log(`   📌 Headers (${headerRow?.length} cols):`, headerRow);
-
-                const dataRows = values.length - (headerRowIndex + 1);
-                console.log(`   📊 Data rows to process: ${dataRows}`);
-
-                // Collect all unique Assignment Status values
-                const allStatuses = new Set();
-                for (let i = headerRowIndex + 1; i < values.length; i++) {
-                    const row = values[i];
-                    if (row && row.length > 6) allStatuses.add(row[6]?.toString().trim() || '(empty)');
-                }
-                console.log(`   🏷️ All Assignment Status values found:`, Array.from(allStatuses));
-                console.log(`   🔎 Status filter applied: ${statusFilter || 'NONE (show all)'}`);
-
-                // Counters for diagnostics
-                let skippedTooShort = 0;
-                let skippedByStatusFilter = 0;
-                let skippedMissingCoords = 0;
-                let added = 0;
+                if (headerRowIndex === -1) headerRowIndex = 0;
 
                 for (let i = headerRowIndex + 1; i < values.length; i++) {
                     const row = values[i];
-
-                    if (!row || row.length < 14) {
-                        skippedTooShort++;
-                        continue;
-                    }
+                    if (!row || row.length < 14) continue;
 
                     const assignmentStatus = row[6]?.toString().trim() || '';
-
-                    if (statusFilter) {
-                        if (assignmentStatus.toLowerCase().trim() !== statusFilter.toLowerCase().trim()) {
-                            skippedByStatusFilter++;
-                            continue;
-                        }
-                    }
+                    if (statusFilter && assignmentStatus.toLowerCase().trim() !== statusFilter.toLowerCase().trim()) continue;
 
                     const lat = parseFloat(row[13]);
                     const lng = parseFloat(row[14]);
-
-                    if (isNaN(lat) || isNaN(lng)) {
-                        skippedMissingCoords++;
-                        console.warn(`   ⚠️ No coords — Store: "${row[1]}" #${row[0]} | lat col N: "${row[13]}" lng col O: "${row[14]}"`);
-                        continue;
-                    }
+                    if (isNaN(lat) || isNaN(lng)) continue;
 
                     stores.push({
                         storeNumber: row[0]?.toString().trim() || '',
                         storeName: row[1]?.toString().trim() || '',
                         state: row[2]?.toString().trim() || '',
                         district: row[3]?.toString().trim() || '',
-                        assignmentStatus: assignmentStatus,
+                        assignmentStatus,
                         address: row[8]?.toString().trim() || '',
                         city: '',
                         zip: '',
                         latitude: lat,
                         longitude: lng,
-                        retailer: 'Lowe\'s',
+                        retailer: "Lowe's",
                         color: CONFIG.LOWES.COLOR,
                         tabSource: tabName
                     });
-                    added++;
                 }
-
-                console.log(`\n   📈 RESULTS for ${tabName}:`);
-                console.log(`      ✅ Added to map:          ${added}`);
-                console.log(`      ❌ Skipped (row too short): ${skippedTooShort}`);
-                console.log(`      ❌ Skipped (status filter): ${skippedByStatusFilter}`);
-                console.log(`      ❌ Skipped (no coords):     ${skippedMissingCoords}`);
-                console.log(`${'='.repeat(60)}\n`);
-
                 return stores;
             };
 
@@ -363,88 +391,54 @@
                 try {
                     setLoading(true);
                     setError('');
-
                     const allStores = [];
 
                     // Home Depot
                     try {
-                        const hdUrl = `https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.HOME_DEPOT.SHEET_ID}/values/${encodeURIComponent(CONFIG.HOME_DEPOT.SHEET_NAME)}?key=${CONFIG.API_KEY}`;
-                        console.log('🔍 Fetching Home Depot data...');
-                        const hdResponse = await fetch(hdUrl);
-                        if (hdResponse.ok) {
-                            const hdData = await hdResponse.json();
-                            if (hdData.values?.length > 0) {
-                                const hdStores = parseHomeDepotData(hdData.values);
-                                console.log(`✅ Home Depot: ${hdStores.length} stores loaded`);
-                                allStores.push(...hdStores);
-                            }
+                        const url = `https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.HOME_DEPOT.SHEET_ID}/values/${encodeURIComponent(CONFIG.HOME_DEPOT.SHEET_NAME)}?key=${CONFIG.API_KEY}`;
+                        const res = await fetch(url);
+                        if (res.ok) {
+                            const data = await res.json();
+                            if (data.values?.length > 0) allStores.push(...parseHomeDepotData(data.values));
                         }
-                    } catch (err) {
-                        console.error('❌ Error fetching Home Depot data:', err);
-                    }
+                    } catch (e) { console.error('HD error:', e); }
 
-                    // Lowe's Tab 2: "Stores Sunly Can Ask For" (show ALL)
+                    // Lowe's Tab 2
                     try {
-                        const lowesTab2Url = `https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.LOWES.SHEET_ID}/values/${encodeURIComponent(CONFIG.LOWES.TAB2)}?key=${CONFIG.API_KEY}`;
-                        console.log("🔍 Fetching Lowe's Tab 2 (Stores Sunly Can Ask For)...");
-                        const lowesTab2Response = await fetch(lowesTab2Url);
-                        if (lowesTab2Response.ok) {
-                            const lowesTab2Data = await lowesTab2Response.json();
-                            if (lowesTab2Data.values?.length > 0) {
-                                const lowesTab2Stores = parseLowesData(lowesTab2Data.values, 'Tab2: Can Ask For', null);
-                                console.log(`✅ Lowe's Tab 2: ${lowesTab2Stores.length} stores loaded`);
-                                allStores.push(...lowesTab2Stores);
-                            }
+                        const url = `https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.LOWES.SHEET_ID}/values/${encodeURIComponent(CONFIG.LOWES.TAB2)}?key=${CONFIG.API_KEY}`;
+                        const res = await fetch(url);
+                        if (res.ok) {
+                            const data = await res.json();
+                            if (data.values?.length > 0) allStores.push(...parseLowesData(data.values, 'Tab2: Can Ask For', null));
                         }
-                    } catch (err) {
-                        console.error("❌ Error fetching Lowe's Tab 2 data:", err);
-                    }
+                    } catch (e) { console.error("Lowe's Tab2 error:", e); }
 
-                    // Lowe's Tab 3: "Sunly Assigned & Available Stores" (show ALL)
+                    // Lowe's Tab 3
                     try {
-                        const lowesTab3Url = `https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.LOWES.SHEET_ID}/values/${encodeURIComponent(CONFIG.LOWES.TAB3)}?key=${CONFIG.API_KEY}`;
-                        console.log("🔍 Fetching Lowe's Tab 3 (Sunly Assigned & Available Stores)...");
-                        const lowesTab3Response = await fetch(lowesTab3Url);
-                        if (lowesTab3Response.ok) {
-                            const lowesTab3Data = await lowesTab3Response.json();
-                            if (lowesTab3Data.values?.length > 0) {
-                                const lowesTab3Stores = parseLowesData(lowesTab3Data.values, 'Tab3: Assigned & Available', null);
-                                console.log(`✅ Lowe's Tab 3: ${lowesTab3Stores.length} stores loaded`);
-                                allStores.push(...lowesTab3Stores);
-                            }
+                        const url = `https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.LOWES.SHEET_ID}/values/${encodeURIComponent(CONFIG.LOWES.TAB3)}?key=${CONFIG.API_KEY}`;
+                        const res = await fetch(url);
+                        if (res.ok) {
+                            const data = await res.json();
+                            if (data.values?.length > 0) allStores.push(...parseLowesData(data.values, 'Tab3: Assigned & Available', null));
                         }
-                    } catch (err) {
-                        console.error("❌ Error fetching Lowe's Tab 3 data:", err);
-                    }
+                    } catch (e) { console.error("Lowe's Tab3 error:", e); }
 
                     // ACE Hardware
                     try {
-                        const aceUrl = `https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.ACE.SHEET_ID}/values/${encodeURIComponent(CONFIG.ACE.SHEET_NAME)}?key=${CONFIG.API_KEY}`;
-                        console.log('🔍 Fetching ACE data...');
-                        const aceResponse = await fetch(aceUrl);
-                        if (aceResponse.ok) {
-                            const aceData = await aceResponse.json();
-                            if (aceData.values?.length > 0) {
-                                const aceStores = parseAceData(aceData.values);
-                                console.log(`✅ ACE: ${aceStores.length} stores loaded`);
-                                allStores.push(...aceStores);
-                            }
+                        const url = `https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.ACE.SHEET_ID}/values/${encodeURIComponent(CONFIG.ACE.SHEET_NAME)}?key=${CONFIG.API_KEY}`;
+                        const res = await fetch(url);
+                        if (res.ok) {
+                            const data = await res.json();
+                            if (data.values?.length > 0) allStores.push(...parseAceData(data.values));
                         }
-                    } catch (err) {
-                        console.error('❌ Error fetching ACE data:', err);
-                    }
-
-                    console.log('📊 Total stores loaded:', allStores.length);
+                    } catch (e) { console.error('ACE error:', e); }
 
                     if (allStores.length === 0) throw new Error('No data loaded from any retailer');
 
                     setStores(allStores);
                     setLastUpdated(new Date());
-
                     if (mapLoaded) addMarkersToMap(filterStores(allStores));
-
                 } catch (err) {
-                    console.error('❌ Error fetching data:', err);
                     setError(err.message);
                 } finally {
                     setLoading(false);
@@ -452,9 +446,7 @@
             };
 
             const filterStores = (storeList) => {
-                let filtered = storeList;
-
-                filtered = filtered.filter(store => {
+                let filtered = storeList.filter(store => {
                     if (store.retailer === 'Home Depot') return retailerFilter.homeDepot;
                     if (store.retailer === "Lowe's") return retailerFilter.lowes;
                     if (store.retailer === 'ACE Hardware') return retailerFilter.ace;
@@ -462,29 +454,26 @@
                 });
 
                 if (searchTerm.trim()) {
-                    filtered = filtered.filter(store => {
-                        const s = searchTerm.toLowerCase();
-                        return (
-                            (store.storeName || '').toLowerCase().includes(s) ||
-                            (store.city || '').toLowerCase().includes(s) ||
-                            (store.retailer || '').toLowerCase().includes(s) ||
-                            (store.state || '').toLowerCase().includes(s) ||
-                            (store.storeNumber || '').toLowerCase().includes(s) ||
-                            (store.address || '').toLowerCase().includes(s)
-                        );
-                    });
+                    const s = searchTerm.toLowerCase();
+                    filtered = filtered.filter(store =>
+                        (store.storeName || '').toLowerCase().includes(s) ||
+                        (store.city || '').toLowerCase().includes(s) ||
+                        (store.retailer || '').toLowerCase().includes(s) ||
+                        (store.state || '').toLowerCase().includes(s) ||
+                        (store.storeNumber || '').toLowerCase().includes(s) ||
+                        (store.address || '').toLowerCase().includes(s)
+                    );
                 }
 
                 if (stateFilter !== 'all') {
                     filtered = filtered.filter(store => store.state === stateFilter);
                 }
-
                 return filtered;
             };
 
             const filteredStores = useMemo(() => filterStores(stores), [stores, searchTerm, stateFilter, retailerFilter]);
 
-            const uniqueStates = [...new Set(stores.map(store => store.state))].filter(s => s && s.trim() !== '').sort();
+            const uniqueStates = [...new Set(stores.map(s => s.state))].filter(s => s?.trim()).sort();
 
             const storeCounts = useMemo(() => ({
                 homeDepot: stores.filter(s => s.retailer === 'Home Depot').length,
@@ -494,21 +483,20 @@
 
             useEffect(() => {
                 let attempts = 0;
-                const checkGoogleMaps = () => {
+                const check = () => {
                     attempts++;
                     if (window.google?.maps?.Map && mapRef.current) {
-                        const success = initializeMap();
-                        if (success) return;
+                        if (initializeMap()) return;
                     }
-                    if (attempts < 50) setTimeout(checkGoogleMaps, 100);
+                    if (attempts < 50) setTimeout(check, 100);
                     else setError('Failed to load Google Maps. Please refresh the page.');
                 };
-                checkGoogleMaps();
+                check();
             }, []);
 
             useEffect(() => {
                 if (mapLoaded) addMarkersToMap(filteredStores);
-            }, [mapLoaded, filteredStores]);
+            }, [mapLoaded, filteredStores, darkMode]);
 
             useEffect(() => {
                 fetchFromGoogleSheets();
@@ -518,192 +506,259 @@
                 }
             }, []);
 
+            const dm = darkMode;
+
+            const headerBg    = dm ? '#1a1d27' : '#ffffff';
+            const headerBorder = dm ? '#2d3148' : '#e5e7eb';
+            const textPrimary  = dm ? '#f1f5f9' : '#111827';
+            const textSec      = dm ? '#94a3b8' : '#4b5563';
+            const textMuted    = dm ? '#64748b' : '#6b7280';
+            const inputBg      = dm ? '#252836' : '#ffffff';
+            const inputBorder  = dm ? '#2d3148' : '#d1d5db';
+            const chipBg       = dm ? '#252836' : '#f9fafb';
+            const chipBorder   = dm ? '#2d3148' : '#e5e7eb';
+            const panelBg      = dm ? '#1a1d27' : '#ffffff';
+            const panelBorder  = dm ? '#2d3148' : '#e5e7eb';
+            const loadingBg    = dm ? 'rgba(26,29,39,0.95)' : 'rgba(255,255,255,0.90)';
+
             return (
-                <div className="w-full h-screen bg-gray-50 flex flex-col">
-                    <div className="bg-white shadow-sm border-b px-4 md:px-6 py-1">
-                        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 mb-1">
-                            <h1 className="text-xl md:text-2xl font-bold text-gray-900">Freedom Available Retail Locations</h1>
-                            <button
-                                onClick={fetchFromGoogleSheets}
-                                disabled={loading}
-                                className="px-3 md:px-4 py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 flex items-center gap-2 text-sm md:text-base touch-manipulation"
-                            >
-                                {loading ? <Loader className="w-5 h-5 animate-spin" /> : <RefreshCw className="w-5 h-5" />}
-                                <span className="hidden sm:inline">Refresh Data</span>
-                                <span className="sm:hidden">Refresh</span>
-                            </button>
+                <div style={{ width: '100%', height: '100vh', background: dm ? '#0f1117' : '#f9fafb', display: 'flex', flexDirection: 'column' }}>
+
+                    {/* ── Header ── */}
+                    <div style={{ background: headerBg, borderBottom: `1px solid ${headerBorder}`, padding: '8px 16px', boxShadow: dm ? '0 1px 4px rgba(0,0,0,0.4)' : '0 1px 2px rgba(0,0,0,0.06)' }}>
+
+                        {/* Row 1: title + controls */}
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                            <h1 style={{ fontSize: '1.25rem', fontWeight: 700, color: textPrimary, margin: 0 }}>
+                                Freedom Available Retail Locations
+                            </h1>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+
+                                {/* Dark mode toggle */}
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                    <span style={{ fontSize: 13, color: textMuted }}>
+                                        {darkMode ? '🌙' : '☀️'}
+                                    </span>
+                                    <button
+                                        onClick={() => setDarkMode(d => !d)}
+                                        className={`dark-toggle ${darkMode ? 'dark' : 'light'}`}
+                                        title="Toggle dark mode"
+                                    >
+                                        <div className="dark-toggle-knob">
+                                            {darkMode ? '🌙' : '☀️'}
+                                        </div>
+                                    </button>
+                                </div>
+
+                                {/* Refresh button */}
+                                <button
+                                    onClick={fetchFromGoogleSheets}
+                                    disabled={loading}
+                                    style={{
+                                        padding: '6px 12px',
+                                        background: '#2563eb',
+                                        color: '#fff',
+                                        border: 'none',
+                                        borderRadius: 8,
+                                        cursor: loading ? 'not-allowed' : 'pointer',
+                                        opacity: loading ? 0.6 : 1,
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: 6,
+                                        fontSize: 13,
+                                        fontWeight: 500
+                                    }}
+                                >
+                                    {loading
+                                        ? <Loader className="w-4 h-4" style={{ animation: 'spin 1s linear infinite' }} />
+                                        : <RefreshCw className="w-4 h-4" />
+                                    }
+                                    <span>Refresh</span>
+                                </button>
+                            </div>
                         </div>
 
+                        {/* Error */}
                         {error && (
-                            <div className="mb-1 p-3 bg-red-50 border border-red-200 rounded-lg flex items-center gap-2">
-                                <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0" />
-                                <span className="text-red-700 text-base">{error}</span>
+                            <div style={{ marginBottom: 6, padding: '8px 12px', background: dm ? '#2d1515' : '#fef2f2', border: `1px solid ${dm ? '#7f1d1d' : '#fecaca'}`, borderRadius: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
+                                <AlertCircle className="w-4 h-4" style={{ color: '#ef4444', flexShrink: 0 }} />
+                                <span style={{ color: dm ? '#fca5a5' : '#dc2626', fontSize: 13 }}>{error}</span>
                             </div>
                         )}
 
+                        {/* Last updated */}
                         {lastUpdated && (
-                            <div className="mb-1 text-xs md:text-sm text-gray-600">
+                            <div style={{ marginBottom: 6, fontSize: 12, color: textMuted }}>
                                 Last updated: {lastUpdated.toLocaleString()}
-                                {CONFIG.REFRESH_MINUTES > 0 && (
-                                    <span className="hidden sm:inline"> • Auto-refresh every {CONFIG.REFRESH_MINUTES} minutes</span>
-                                )}
+                                {CONFIG.REFRESH_MINUTES > 0 && <span> · Auto-refresh every {CONFIG.REFRESH_MINUTES} min</span>}
                             </div>
                         )}
 
-                        {/* Retailer Summary */}
-                        <div className="flex flex-wrap gap-2 mb-2">
-                            <div style={{ padding: '0.5rem', borderRadius: '0.5rem', border: '1px solid #F96302', background: 'linear-gradient(135deg, #FFF3E0 0%, #FFE0B2 100%)', width: '140px' }}>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.375rem' }}>
-                                    <div style={{ width: '0.75rem', height: '0.75rem', borderRadius: '50%', backgroundColor: '#F96302' }}></div>
-                                    <span style={{ color: '#F96302', fontWeight: '500', fontSize: '0.875rem' }}>Home Depot</span>
+                        {/* ── Retailer Summary Cards ── */}
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 8 }}>
+                            {[
+                                { key: 'homeDepot', color: '#F96302', bg: dm ? '#2a1a0a' : '#fff3e0', label: 'Home Depot', count: storeCounts.homeDepot },
+                                { key: 'lowes',     color: '#004990', bg: dm ? '#0a1220' : '#e3f2fd', label: "Lowe's",      count: storeCounts.lowes },
+                                { key: 'ace',       color: '#ED1C24', bg: dm ? '#2a0a0a' : '#ffebee', label: 'ACE Hardware', count: storeCounts.ace }
+                            ].map(r => (
+                                <div key={r.key} style={{ padding: '6px 10px', borderRadius: 8, border: `1px solid ${r.color}`, background: r.bg, minWidth: 120 }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                        <div style={{ width: 10, height: 10, borderRadius: '50%', background: r.color }}></div>
+                                        <span style={{ color: r.color, fontWeight: 500, fontSize: 13 }}>{r.label}</span>
+                                    </div>
+                                    <div style={{ fontSize: '1.2rem', fontWeight: 700, marginTop: 2, color: r.color }}>{r.count}</div>
                                 </div>
-                                <div style={{ fontSize: '1.25rem', fontWeight: 'bold', marginTop: '0.25rem', color: '#F96302' }}>{storeCounts.homeDepot}</div>
-                            </div>
-
-                            <div style={{ padding: '0.5rem', borderRadius: '0.5rem', border: '1px solid #004990', background: 'linear-gradient(135deg, #E3F2FD 0%, #BBDEFB 100%)', width: '140px' }}>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.375rem' }}>
-                                    <div style={{ width: '0.75rem', height: '0.75rem', borderRadius: '50%', backgroundColor: '#004990' }}></div>
-                                    <span style={{ color: '#004990', fontWeight: '500', fontSize: '0.875rem' }}>Lowe's</span>
-                                </div>
-                                <div style={{ fontSize: '1.25rem', fontWeight: 'bold', marginTop: '0.25rem', color: '#004990' }}>{storeCounts.lowes}</div>
-                            </div>
-
-                            <div style={{ padding: '0.5rem', borderRadius: '0.5rem', border: '1px solid #ED1C24', background: 'linear-gradient(135deg, #FFEBEE 0%, #FFCDD2 100%)', width: '140px' }}>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.375rem' }}>
-                                    <div style={{ width: '0.75rem', height: '0.75rem', borderRadius: '50%', backgroundColor: '#ED1C24' }}></div>
-                                    <span style={{ color: '#ED1C24', fontWeight: '500', fontSize: '0.875rem' }}>ACE Hardware</span>
-                                </div>
-                                <div style={{ fontSize: '1.25rem', fontWeight: 'bold', marginTop: '0.25rem', color: '#ED1C24' }}>{storeCounts.ace}</div>
-                            </div>
+                            ))}
                         </div>
 
-                        {/* Retailer Toggle Filters */}
-                        <div className="flex flex-wrap gap-2 mb-2">
-                            <label className="flex items-center gap-2 px-3 py-1.5 bg-gray-50 rounded-lg border cursor-pointer hover:bg-gray-100">
-                                <input type="checkbox" checked={retailerFilter.homeDepot} onChange={(e) => setRetailerFilter(prev => ({ ...prev, homeDepot: e.target.checked }))} className="w-4 h-4" />
-                                <span className="text-sm font-medium" style={{ color: '#F96302' }}>Show Home Depot</span>
-                            </label>
-
-                            <label className="flex items-center gap-2 px-3 py-1.5 bg-gray-50 rounded-lg border cursor-pointer hover:bg-gray-100">
-                                <input type="checkbox" checked={retailerFilter.lowes} onChange={(e) => setRetailerFilter(prev => ({ ...prev, lowes: e.target.checked }))} className="w-4 h-4" />
-                                <span className="text-sm font-medium" style={{ color: '#004990' }}>Show Lowe's</span>
-                            </label>
-
-                            <label className="flex items-center gap-2 px-3 py-1.5 bg-gray-50 rounded-lg border cursor-pointer hover:bg-gray-100">
-                                <input type="checkbox" checked={retailerFilter.ace} onChange={(e) => setRetailerFilter(prev => ({ ...prev, ace: e.target.checked }))} className="w-4 h-4" />
-                                <span className="text-sm font-medium" style={{ color: '#ED1C24' }}>Show ACE Hardware</span>
-                            </label>
+                        {/* ── Retailer Toggles ── */}
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 8 }}>
+                            {[
+                                { key: 'homeDepot', color: '#F96302', label: 'Show Home Depot' },
+                                { key: 'lowes',     color: '#004990', label: "Show Lowe's" },
+                                { key: 'ace',       color: '#ED1C24', label: 'Show ACE Hardware' }
+                            ].map(r => (
+                                <label key={r.key} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '5px 10px', background: chipBg, border: `1px solid ${chipBorder}`, borderRadius: 8, cursor: 'pointer', fontSize: 13, fontWeight: 500, color: r.color }}>
+                                    <input
+                                        type="checkbox"
+                                        checked={retailerFilter[r.key]}
+                                        onChange={e => setRetailerFilter(p => ({ ...p, [r.key]: e.target.checked }))}
+                                        style={{ width: 14, height: 14 }}
+                                    />
+                                    {r.label}
+                                </label>
+                            ))}
                         </div>
 
-                        {/* Search and State Filters */}
-                        <div className="flex flex-col lg:flex-row gap-2 md:gap-3 items-stretch lg:items-center">
-                            <div className="flex items-center gap-2 flex-1 min-w-0">
-                                <Search className="w-4 h-4 text-gray-500 flex-shrink-0" />
+                        {/* ── Status Legend ── */}
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 8, alignItems: 'center' }}>
+                            <span style={{ fontSize: 12, color: textMuted, marginRight: 2 }}>Status:</span>
+                            {[
+                                { label: 'Open',     cls: 'status-open' },
+                                { label: 'Staffed',  cls: 'status-staffed' },
+                                { label: 'Reserved', cls: 'status-reserved' }
+                            ].map(s => (
+                                <span key={s.label} className={s.cls} style={{ fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 12 }}>
+                                    {s.label}
+                                </span>
+                            ))}
+                        </div>
+
+                        {/* ── Search & State Filter ── */}
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
+                            <div style={{ position: 'relative', flex: 1, minWidth: 180 }}>
+                                <Search className="w-4 h-4" style={{ position: 'absolute', left: 8, top: '50%', transform: 'translateY(-50%)', color: textMuted }} />
                                 <input
                                     type="text"
-                                    placeholder="Search stores, cities, retailers..."
+                                    placeholder="Search stores, cities, states..."
                                     value={searchTerm}
-                                    onChange={(e) => setSearchTerm(e.target.value)}
-                                    className="flex-1 px-2 py-1.5 border rounded-lg text-sm touch-manipulation"
+                                    onChange={e => setSearchTerm(e.target.value)}
+                                    style={{ width: '100%', paddingLeft: 28, paddingRight: 10, paddingTop: 6, paddingBottom: 6, border: `1px solid ${inputBorder}`, borderRadius: 8, background: inputBg, color: textPrimary, fontSize: 13, boxSizing: 'border-box' }}
                                 />
                             </div>
 
-                            <div className="flex flex-wrap lg:flex-nowrap items-center gap-2">
-                                <select
-                                    value={stateFilter}
-                                    onChange={(e) => setStateFilter(e.target.value)}
-                                    className="px-2 py-1.5 border rounded-lg text-sm touch-manipulation min-w-0"
-                                >
-                                    <option value="all">All States ({stores.length})</option>
-                                    {uniqueStates.map(state => (
-                                        <option key={state} value={state}>
-                                            {state || 'Unknown'} ({stores.filter(s => s.state === state).length})
-                                        </option>
-                                    ))}
-                                </select>
+                            <select
+                                value={stateFilter}
+                                onChange={e => setStateFilter(e.target.value)}
+                                style={{ padding: '6px 8px', border: `1px solid ${inputBorder}`, borderRadius: 8, background: inputBg, color: textPrimary, fontSize: 13 }}
+                            >
+                                <option value="all">All States ({stores.length})</option>
+                                {uniqueStates.map(state => (
+                                    <option key={state} value={state}>{state} ({stores.filter(s => s.state === state).length})</option>
+                                ))}
+                            </select>
 
-                                <div className="text-sm text-gray-600 whitespace-nowrap font-medium">
-                                    Showing {filteredStores.length} of {stores.length} stores
-                                </div>
+                            <div style={{ fontSize: 12, color: textMuted, fontWeight: 500, whiteSpace: 'nowrap' }}>
+                                Showing {filteredStores.length} of {stores.length} stores
                             </div>
                         </div>
                     </div>
 
-                    <div className="flex-1 flex">
-                        <div className="flex-1 relative">
-                            <div ref={mapRef} id="map" className="w-full h-full"></div>
+                    {/* ── Map + Side Panel ── */}
+                    <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
+                        <div style={{ flex: 1, position: 'relative' }}>
+                            <div ref={mapRef} id="map" style={{ width: '100%', height: '100%' }}></div>
 
                             {loading && (
-                                <div className="absolute inset-0 bg-white bg-opacity-90 flex items-center justify-center z-10">
-                                    <div className="flex flex-col items-center gap-4 p-6 bg-white rounded-xl shadow-lg border">
-                                        <Loader className="w-8 h-8 animate-spin text-blue-600" />
-                                        <span className="text-gray-700 font-medium">Loading stores from multiple retailers...</span>
+                                <div style={{ position: 'absolute', inset: 0, background: loadingBg, display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 10 }}>
+                                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12, padding: 24, background: panelBg, borderRadius: 12, border: `1px solid ${panelBorder}`, boxShadow: '0 8px 24px rgba(0,0,0,0.15)' }}>
+                                        <Loader className="w-8 h-8" style={{ color: '#2563eb', animation: 'spin 1s linear infinite' }} />
+                                        <span style={{ color: textPrimary, fontWeight: 500, fontSize: 14 }}>Loading stores from multiple retailers…</span>
                                     </div>
                                 </div>
                             )}
                         </div>
 
+                        {/* ── Store Detail Panel ── */}
                         {selectedStore && (
-                            <div className="w-full sm:w-72 md:w-80 bg-white shadow-lg border-l overflow-y-auto">
-                                <div className="p-4">
-                                    <div className="flex items-start justify-between mb-3">
-                                        <div className="flex-1 min-w-0">
-                                            <h2 className="text-base font-bold leading-tight">{selectedStore.storeName}</h2>
-                                        </div>
+                            <div style={{ width: 280, background: panelBg, borderLeft: `1px solid ${panelBorder}`, overflowY: 'auto', boxShadow: dm ? '-4px 0 12px rgba(0,0,0,0.4)' : '-2px 0 8px rgba(0,0,0,0.06)' }}>
+                                <div style={{ padding: 16 }}>
+                                    <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 12 }}>
+                                        <h2 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: textPrimary, lineHeight: 1.3, flex: 1 }}>
+                                            {selectedStore.storeName}
+                                        </h2>
                                         <button
                                             onClick={() => setSelectedStore(null)}
-                                            className="text-gray-400 hover:text-gray-600 text-xl ml-3 p-1 hover:bg-gray-100 rounded flex-shrink-0"
+                                            style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 20, color: textMuted, marginLeft: 8, padding: 2, borderRadius: 4 }}
                                         >×</button>
                                     </div>
 
-                                    <div className="space-y-4">
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+
+                                        {/* Retailer */}
                                         <div>
-                                            <div className="text-xs font-medium text-gray-700 mb-2">Retailer</div>
-                                            <div className="inline-block px-3 py-1 rounded-full text-sm font-medium" style={{
-                                                backgroundColor: selectedStore.retailer === 'Home Depot' ? '#FFF3E0' : selectedStore.retailer === "Lowe's" ? '#E3F2FD' : '#FFEBEE',
+                                            <div style={{ fontSize: 11, fontWeight: 600, color: textMuted, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4 }}>Retailer</div>
+                                            <span style={{
+                                                display: 'inline-block', padding: '3px 10px', borderRadius: 99, fontSize: 13, fontWeight: 500,
+                                                background: selectedStore.retailer === 'Home Depot' ? (dm ? '#2a1a0a' : '#fff3e0')
+                                                          : selectedStore.retailer === "Lowe's"     ? (dm ? '#0a1220' : '#e3f2fd')
+                                                          : (dm ? '#2a0a0a' : '#ffebee'),
                                                 color: selectedStore.color
                                             }}>
                                                 {selectedStore.retailer}
-                                            </div>
+                                            </span>
                                         </div>
 
-                                        {selectedStore.status && (
+                                        {/* Status */}
+                                        {(selectedStore.status || selectedStore.assignmentStatus) && (
                                             <div>
-                                                <div className="text-xs font-medium text-gray-700 mb-2">Status</div>
-                                                <div className="text-sm text-gray-900">{selectedStore.status}</div>
+                                                <div style={{ fontSize: 11, fontWeight: 600, color: textMuted, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4 }}>Status</div>
+                                                <span className={statusBadgeClass(selectedStore.status || selectedStore.assignmentStatus)}
+                                                    style={{ display: 'inline-block', padding: '3px 10px', borderRadius: 99, fontSize: 13, fontWeight: 600 }}>
+                                                    {selectedStore.status || selectedStore.assignmentStatus}
+                                                </span>
                                             </div>
                                         )}
 
-                                        {selectedStore.assignmentStatus && (
+                                        {/* Store Number */}
+                                        {selectedStore.storeNumber && (
                                             <div>
-                                                <div className="text-xs font-medium text-gray-700 mb-2">Assignment Status</div>
-                                                <div className="text-sm text-gray-900">{selectedStore.assignmentStatus}</div>
+                                                <div style={{ fontSize: 11, fontWeight: 600, color: textMuted, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4 }}>Store #</div>
+                                                <div style={{ fontSize: 13, color: textPrimary }}>{selectedStore.storeNumber}</div>
                                             </div>
                                         )}
 
+                                        {/* Address */}
                                         <div>
-                                            <div className="text-xs font-medium text-gray-700 mb-2">Store Number</div>
-                                            <div className="text-sm text-gray-900">{selectedStore.storeNumber}</div>
-                                        </div>
-
-                                        <div>
-                                            <div className="text-xs font-medium text-gray-700 mb-2">Address</div>
-                                            <div className="text-sm text-gray-900 leading-relaxed">
-                                                {selectedStore.retailer === 'ACE Hardware' || selectedStore.retailer === "Lowe's" ? (
-                                                    selectedStore.address
-                                                ) : (
-                                                    <>
-                                                        {selectedStore.address}
-                                                        {selectedStore.city && selectedStore.city.trim() !== '' && (
-                                                            <><br />{selectedStore.city}, {selectedStore.state} {selectedStore.zip}</>
-                                                        )}
-                                                        {(!selectedStore.city || selectedStore.city.trim() === '') && selectedStore.state && (
-                                                            <><br />{selectedStore.state}</>
-                                                        )}
-                                                    </>
+                                            <div style={{ fontSize: 11, fontWeight: 600, color: textMuted, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4 }}>Address</div>
+                                            <div style={{ fontSize: 13, color: textPrimary, lineHeight: 1.5 }}>
+                                                {selectedStore.address}
+                                                {selectedStore.city?.trim() && (
+                                                    <><br />{selectedStore.city}, {selectedStore.state} {selectedStore.zip}</>
+                                                )}
+                                                {!selectedStore.city?.trim() && selectedStore.state && (
+                                                    <><br />{selectedStore.state}</>
                                                 )}
                                             </div>
                                         </div>
+
+                                        {/* Tab Source (Lowe's only) */}
+                                        {selectedStore.tabSource && (
+                                            <div>
+                                                <div style={{ fontSize: 11, fontWeight: 600, color: textMuted, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4 }}>Source</div>
+                                                <div style={{ fontSize: 12, color: textMuted }}>{selectedStore.tabSource}</div>
+                                            </div>
+                                        )}
                                     </div>
                                 </div>
                             </div>
